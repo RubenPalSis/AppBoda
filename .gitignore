@@ -1,0 +1,63 @@
+# ==========================================================
+#  .gitignore — App de boda (Firebase Hosting + PWA)
+# ==========================================================
+
+# ---------- Firebase CLI ----------
+# Caché local de despliegues de Hosting
+.firebase/
+# Logs de la CLI y de los emuladores
+firebase-debug.log*
+firebase-debug.*.log*
+firestore-debug.log*
+storage-debug.log*
+database-debug.log*
+pubsub-debug.log*
+ui-debug.log*
+# Datos exportados de los emuladores (firebase emulators:export)
+emulator-data/
+.emulator-data/
+# Configuración local de funciones (si en el futuro se añaden Cloud Functions)
+.runtimeconfig.json
+
+# ---------- Copias de seguridad de fotos ----------
+# Nunca subir las fotos de los invitados al repositorio
+fotos-boda*/
+fotos-boda*.zip
+*.zip
+backup/
+backups/
+
+# ---------- Node / npm (solo si se instala algo en local) ----------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+
+# ---------- Variables de entorno / secretos ----------
+.env
+.env.*
+!.env.example
+# Claves de cuentas de servicio de Google Cloud (nunca deben subirse)
+*-service-account*.json
+service-account*.json
+*-firebase-adminsdk-*.json
+
+# ---------- Sistema operativo ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+._*
+
+# ---------- Editores ----------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ---------- Varios ----------
+*.log
+*.tmp
+.cache/

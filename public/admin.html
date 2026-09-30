@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Administración · Iván &amp; Ángela</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#faf7f2">
+    <link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32" type="image/png">
+    <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Montserrat:wght@400;500;600&display=swap">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body class="admin">
+
+    <!-- ================= LOGIN ================= -->
+    <div id="login" class="gate hero" hidden>
+        <div class="gate__inner fade-in">
+            <div class="ornament" aria-hidden="true"><span></span>❦<span></span></div>
+            <h1 class="display display--sm"><span data-couple class="uppercase">Iván &amp; Ángela</span></h1>
+            <p class="date-line uppercase">Panel de administración</p>
+
+            <form id="login-form" class="gate__form" novalidate>
+                <label for="login-email" class="label">Email</label>
+                <input id="login-email" class="input input--left" type="email" autocomplete="username" required>
+                <label for="login-password" class="label label--spaced">Contraseña</label>
+                <input id="login-password" class="input input--left" type="password" autocomplete="current-password" required>
+                <p id="login-error" class="form-error" role="alert"></p>
+                <button type="submit" class="btn btn--primary btn--block">Iniciar sesión</button>
+                <button id="login-reset" type="button" class="btn btn--ghost btn--block">¿Has olvidado la contraseña?</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= PANEL ================= -->
+    <div id="dashboard" hidden>
+        <header class="admin-bar">
+            <div>
+                <strong class="admin-bar__title" data-couple>Iván &amp; Ángela</strong>
+                <span class="admin-bar__user" id="admin-email"></span>
+            </div>
+            <button id="logout" type="button" class="btn btn--outline btn--sm">Salir</button>
+        </header>
+
+        <main class="admin-main">
+            <section class="stats" aria-label="Estadísticas">
+                <div class="stat"><span id="stat-photos">0</span><small>Fotografías</small></div>
+                <div class="stat"><span id="stat-likes">0</span><small>Likes totales</small></div>
+                <div class="stat"><span id="stat-recent">0</span><small>Últimas 24 h</small></div>
+                <div class="stat"><span id="stat-size">0</span><small>Almacenamiento</small></div>
+            </section>
+
+            <section class="toolbar" aria-label="Acciones">
+                <div class="toolbar__group">
+                    <label class="select-wrap">
+                        <span class="visually-hidden">Filtrar</span>
+                        <select id="filter" class="select">
+                            <option value="all">Todas</option>
+                            <option value="recent">Recientes (24 h)</option>
+                        </select>
+                    </label>
+                    <label class="select-wrap">
+                        <span class="visually-hidden">Ordenar</span>
+                        <select id="sort" class="select">
+                            <option value="newest">Más recientes</option>
+                            <option value="oldest">Más antiguas</option>
+                            <option value="likes">Más likes</option>
+                        </select>
+                    </label>
+                    <button id="select-all" type="button" class="btn btn--ghost btn--sm">Seleccionar todas</button>
+                    <button id="select-none" type="button" class="btn btn--ghost btn--sm">Quitar selección</button>
+                </div>
+                <div class="toolbar__group">
+                    <span id="selection-count" class="muted">0 seleccionadas</span>
+                    <button id="download-selected" type="button" class="btn btn--outline btn--sm" disabled>📦 Descargar seleccionadas</button>
+                    <button id="delete-selected" type="button" class="btn btn--danger btn--sm" disabled>🗑️ Eliminar seleccionadas</button>
+                    <button id="download-all" type="button" class="btn btn--primary btn--sm">📦 DESCARGAR TODAS</button>
+                </div>
+            </section>
+
+            <p id="admin-empty" class="empty" hidden>Todavía no hay fotografías.</p>
+            <div id="admin-grid" class="admin-grid"></div>
+        </main>
+    </div>
+
+    <!-- Progreso del ZIP -->
+    <div id="zip-overlay" class="modal is-visible" hidden>
+        <div class="modal__card">
+            <h3 class="modal__title">Preparando descarga</h3>
+            <p id="zip-text" class="modal__text">Descargando fotos…</p>
+            <div class="progress__track"><div id="zip-bar" class="progress__bar"></div></div>
+            <p class="zip-hint">No cierres ni bloquees esta pestaña hasta que termine.</p>
+            <button id="zip-cancel" type="button" class="btn btn--ghost">Cancelar</button>
+        </div>
+    </div>
+
+    <script type="module" src="js/admin.js"></script>
+</body>
+</html>

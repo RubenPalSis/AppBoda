@@ -1,0 +1,58 @@
+rules_version = '2';
+
+// =====================================================================
+//  Reglas de Firebase Storage — App de boda
+//
+//  Cada archivo guarda en sus metadatos el UID de quien lo subió
+//  (customMetadata.ownerId). Solo ese UID, o un administrador, puede borrarlo.
+//  Los archivos no se pueden sobrescribir.
+// =====================================================================
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Consulta Firestore: ¿existe /admins/{uid}?
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+
+    function validUpload(fileName, maxBytes) {
+      return signedIn()
+        && fileName.matches('photo_[0-9]+_[a-z0-9]+[.]jpg')
+        && request.resource.size < maxBytes
+        && request.resource.contentType == 'image/jpeg'
+        && request.resource.metadata.ownerId == request.auth.uid;
+    }
+
+    function canDelete() {
+      return signedIn()
+        && (resource.metadata.ownerId == request.auth.uid || isAdmin());
+    }
+
+    // Fotos comprimidas (máx. 4 MB; tras la compresión suelen ocupar 0,3-1,5 MB)
+    match /weddings/{weddingId}/photos/{fileName} {
+      allow read: if signedIn();
+      allow create: if validUpload(fileName, 4 * 1024 * 1024);
+      allow update: if false;
+      allow delete: if canDelete();
+    }
+
+    // Miniaturas para la galería (máx. 600 KB)
+    match /weddings/{weddingId}/thumbs/{fileName} {
+      allow read: if signedIn();
+      allow create: if validUpload(fileName, 600 * 1024);
+      allow update: if false;
+      allow delete: if canDelete();
+    }
+
+    // Todo lo demás, denegado.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

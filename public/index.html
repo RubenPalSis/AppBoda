@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Iván &amp; Ángela</title>
+    <meta name="description" content="Comparte tus fotos de la boda de Iván y Ángela.">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#faf7f2">
+
+    <!-- PWA / iOS -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Iván &amp; Ángela">
+    <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+    <link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32" type="image/png">
+    <link rel="icon" href="assets/icons/icon.svg" type="image/svg+xml">
+
+    <!-- Tipografías: Cormorant Garamond (títulos) + Montserrat (texto) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Montserrat:wght@400;500;600&display=swap">
+
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+    <!-- ================= PANTALLA DE ACCESO ================= -->
+    <div id="gate" class="gate hero" hidden>
+        <div class="gate__inner fade-in">
+            <div class="ornament" aria-hidden="true"><span></span>❦<span></span></div>
+            <h1 class="display"><span data-couple class="uppercase">Iván &amp; Ángela</span></h1>
+            <p class="date-line uppercase" data-date>7 de noviembre de 2026</p>
+            <p class="tagline" data-text="gateTagline">Comparte tus recuerdos con nosotros ❤️</p>
+
+            <form id="gate-form" class="gate__form" novalidate>
+                <label for="gate-code" class="label">Introduce el código de la boda</label>
+                <input id="gate-code" class="input" type="text" name="code" required
+                       autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+                       enterkeyhint="go" aria-describedby="gate-error">
+                <p id="gate-error" class="form-error" role="alert"></p>
+                <button type="submit" class="btn btn--primary btn--block">ENTRAR</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= APLICACIÓN ================= -->
+    <div id="app" hidden>
+        <header class="topbar">
+            <a href="#inicio" class="topbar__monogram" data-monogram aria-label="Inicio">I &amp; Á</a>
+        </header>
+
+        <main class="main">
+
+            <!-- INICIO -->
+            <section id="view-inicio" class="view" aria-labelledby="home-title">
+                <div class="hero hero--home">
+                    <div class="hero__content fade-in">
+                        <div class="ornament" aria-hidden="true"><span></span>❦<span></span></div>
+                        <h1 id="home-title" class="display"><span data-couple class="uppercase">Iván &amp; Ángela</span></h1>
+                        <p class="date-line uppercase" data-date>7 de noviembre de 2026</p>
+                        <p class="welcome" data-text="welcome">Bienvenidos a nuestro día</p>
+
+                        <p id="countdown-message" class="countdown__message"></p>
+                        <div id="countdown" class="countdown" role="timer" aria-live="off">
+                            <div class="countdown__unit"><span id="cd-days">0</span><small>días</small></div>
+                            <div class="countdown__unit"><span id="cd-hours">00</span><small>horas</small></div>
+                            <div class="countdown__unit"><span id="cd-minutes">00</span><small>min</small></div>
+                            <div class="countdown__unit"><span id="cd-seconds">00</span><small>seg</small></div>
+                        </div>
+
+                        <div class="hero__actions">
+                            <a href="#subir" class="btn btn--primary">📸 Subir fotos</a>
+                            <a href="#galeria" class="btn btn--outline">Ver galería</a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- GALERÍA -->
+            <section id="view-galeria" class="view" aria-labelledby="gallery-title" hidden>
+                <div class="section-head">
+                    <h2 id="gallery-title" class="section-title">📸 Galería</h2>
+                    <p id="gallery-count" class="muted"></p>
+                </div>
+                <p id="gallery-empty" class="empty" hidden></p>
+                <div id="gallery-grid" class="gallery"></div>
+                <div id="gallery-sentinel" aria-hidden="true"></div>
+                <button id="gallery-more" type="button" class="btn btn--outline btn--center" hidden>Ver más fotos</button>
+            </section>
+
+            <!-- SUBIR -->
+            <section id="view-subir" class="view" aria-labelledby="upload-title" hidden>
+                <div class="section-head">
+                    <h2 id="upload-title" class="section-title">📸 Sube tus fotos</h2>
+                    <p class="muted" data-text="uploadIntro"></p>
+                </div>
+
+                <label class="dropzone" for="upload-input">
+                    <span class="dropzone__icon" aria-hidden="true">＋</span>
+                    <span class="dropzone__title">Elegir fotos</span>
+                    <span class="dropzone__hint" id="upload-limit"></span>
+                </label>
+                <input id="upload-input" class="visually-hidden" type="file" multiple
+                       accept="image/*"><!-- image/* hace que iPhone convierta HEIC a JPEG automáticamente -->
+
+                <ul id="upload-list" class="upload-list" aria-live="polite"></ul>
+
+                <div id="upload-actions" class="upload-actions" hidden>
+                    <p id="upload-summary" class="upload-summary"></p>
+                    <div class="upload-actions__buttons">
+                        <button id="upload-clear" type="button" class="btn btn--ghost">Vaciar</button>
+                        <button id="upload-submit" type="button" class="btn btn--primary" disabled>Subir</button>
+                    </div>
+                </div>
+
+                <div id="upload-progress" class="progress" hidden>
+                    <p id="upload-progress-text" class="progress__text" aria-live="polite"></p>
+                    <div class="progress__track"><div id="upload-progress-bar" class="progress__bar"></div></div>
+                </div>
+            </section>
+
+            <!-- BODA -->
+            <section id="view-boda" class="view" aria-labelledby="wedding-title" hidden>
+                <div class="section-head">
+                    <h2 id="wedding-title" class="section-title">💍 Nuestra boda</h2>
+                </div>
+
+                <article class="card card--date">
+                    <span class="card__icon" aria-hidden="true">📅</span>
+                    <h3 class="card__title">Fecha</h3>
+                    <p class="date-big" data-date>7 de noviembre de 2026</p>
+                </article>
+
+                <div id="wedding-places" class="cards"></div>
+
+                <h3 class="subsection-title">Horarios</h3>
+                <ol id="wedding-schedule" class="timeline card"></ol>
+
+                <h3 class="subsection-title">Información adicional</h3>
+                <div id="wedding-extra" class="cards"></div>
+            </section>
+
+            <!-- MÁS -->
+            <section id="view-mas" class="view" aria-labelledby="more-title" hidden>
+                <div class="section-head">
+                    <h2 id="more-title" class="section-title">ℹ️ Más</h2>
+                </div>
+                <article class="card">
+                    <h3 class="card__title">📲 Instalar la app</h3>
+                    <p id="install-help"></p>
+                    <button id="install-btn" type="button" class="btn btn--primary" hidden>Instalar ahora</button>
+                </article>
+                <article class="card">
+                    <h3 class="card__title">🔒 Privacidad</h3>
+                    <p>No pedimos ni guardamos tu nombre, email ni ningún dato personal. Las fotos se comprimen en tu móvil y se eliminan sus datos de ubicación antes de subirlas. Puedes borrar en cualquier momento las fotos que hayas subido desde este dispositivo.</p>
+                </article>
+                <article class="card">
+                    <h3 class="card__title">🚪 Salir</h3>
+                    <p>Vuelve a la pantalla del código de acceso. Tus fotos no se borran.</p>
+                    <button id="logout-btn" type="button" class="btn btn--outline">Cerrar sesión</button>
+                </article>
+            </section>
+        </main>
+
+        <!-- Navegación inferior -->
+        <nav class="tabbar" aria-label="Navegación principal">
+            <a href="#inicio" class="tabbar__item"><span aria-hidden="true">🏠</span>Inicio</a>
+            <a href="#galeria" class="tabbar__item"><span aria-hidden="true">📸</span>Galería</a>
+            <a href="#subir" class="tabbar__item tabbar__item--main"><span aria-hidden="true">＋</span>Subir</a>
+            <a href="#boda" class="tabbar__item"><span aria-hidden="true">💍</span>Boda</a>
+            <a href="#mas" class="tabbar__item"><span aria-hidden="true">ℹ️</span>Más</a>
+        </nav>
+    </div>
+
+    <!-- ================= VISOR ================= -->
+    <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="Visor de fotos" hidden>
+        <div class="lightbox__top">
+            <span id="lightbox-counter" class="lightbox__counter"></span>
+            <button id="lightbox-close" type="button" class="icon-btn" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="lightbox__stage">
+            <button id="lightbox-prev" type="button" class="icon-btn lightbox__nav lightbox__nav--prev" aria-label="Foto anterior">‹</button>
+            <img id="lightbox-img" class="lightbox__img" alt="Foto de la boda">
+            <button id="lightbox-next" type="button" class="icon-btn lightbox__nav lightbox__nav--next" aria-label="Foto siguiente">›</button>
+        </div>
+        <div class="lightbox__bar">
+            <span id="lightbox-likes" class="lightbox__likes">❤️ 0</span>
+            <div class="lightbox__actions">
+                <button id="lightbox-like" type="button" class="btn btn--light" aria-pressed="false">🤍 Me gusta</button>
+                <button id="lightbox-download" type="button" class="btn btn--light">⬇️ Descargar</button>
+                <button id="lightbox-delete" type="button" class="btn btn--danger" hidden>🗑️ Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

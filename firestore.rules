@@ -1,0 +1,106 @@
+rules_version = '2';
+
+// =====================================================================
+//  Reglas de Firestore — App de boda
+//
+//  Los invitados usan Firebase Authentication ANÓNIMO (sin datos
+//  personales): cada dispositivo tiene un UID único → request.auth.uid.
+//  El administrador usa email/contraseña y su UID debe existir como
+//  documento en la colección /admins (se crea a mano en la consola).
+// =====================================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function photoDoc(photoId) {
+      return /databases/$(database)/documents/photos/$(photoId);
+    }
+
+    function likeDoc(photoId) {
+      return /databases/$(database)/documents/photos/$(photoId)/likes/$(request.auth.uid);
+    }
+
+    // ---------- Administradores ----------
+    // Cada usuario solo puede comprobar si ÉL es admin. Nadie puede escribir
+    // desde la app (los admins se crean desde Firebase Console).
+    match /admins/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // ---------- Fotos ----------
+    match /photos/{photoId} {
+
+      // Cualquier dispositivo con sesión (invitado o admin) puede ver la galería.
+      allow read: if signedIn();
+
+      // Crear: solo a nombre propio, con likes = 0, fecha del servidor y
+      // únicamente los campos esperados.
+      allow create: if signedIn()
+        && photoId.matches('photo_[0-9]+_[a-z0-9]+')
+        && request.resource.data.keys().hasOnly([
+             'storagePath', 'thumbPath', 'downloadURL', 'thumbURL', 'ownerId',
+             'createdAt', 'likes', 'width', 'height', 'size'])
+        && request.resource.data.keys().hasAll([
+             'storagePath', 'thumbPath', 'downloadURL', 'thumbURL', 'ownerId', 'createdAt', 'likes'])
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.likes == 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.storagePath.matches('weddings/[a-z0-9-]+/photos/' + photoId + '[.]jpg')
+        && request.resource.data.thumbPath.matches('weddings/[a-z0-9-]+/thumbs/' + photoId + '[.]jpg')
+        && request.resource.data.downloadURL is string && request.resource.data.downloadURL.size() < 2048
+        && request.resource.data.thumbURL is string && request.resource.data.thumbURL.size() < 2048;
+
+      // Actualizar: SOLO el contador de likes, y solo +1 si a la vez se crea
+      // el like del propio UID (o -1 si se borra). Ver /likes más abajo.
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+        && (
+          (request.resource.data.likes == resource.data.likes + 1
+             && !exists(likeDoc(photoId)) && existsAfter(likeDoc(photoId)))
+          ||
+          (request.resource.data.likes == resource.data.likes - 1
+             && exists(likeDoc(photoId)) && !existsAfter(likeDoc(photoId)))
+        );
+
+      // Eliminar: el dueño de la foto o el administrador.
+      allow delete: if signedIn()
+        && (resource.data.ownerId == request.auth.uid || isAdmin());
+
+      // ---------- Likes: photos/{photoId}/likes/{uid} ----------
+      // El ID del documento ES el UID → imposible dar dos likes con el mismo dispositivo.
+      match /likes/{uid} {
+        allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+
+        // Crear like propio, solo si en el mismo lote el contador sube exactamente 1.
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['createdAt'])
+          && request.resource.data.createdAt == request.time
+          && getAfter(photoDoc(photoId)).data.likes == get(photoDoc(photoId)).data.likes + 1;
+
+        // Quitar like propio (el contador baja 1) o limpieza por el administrador.
+        allow delete: if signedIn() && (
+          (request.auth.uid == uid
+             && getAfter(photoDoc(photoId)).data.likes == get(photoDoc(photoId)).data.likes - 1)
+          || isAdmin());
+
+        allow update: if false;
+      }
+    }
+
+    // Todo lo demás, denegado.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
