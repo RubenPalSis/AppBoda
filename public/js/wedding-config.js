@@ -21,7 +21,7 @@ export const weddingConfig = {
     // Fecha de la boda (AAAA-MM-DD).
     date: "2026-11-07",
     // Hora a la que termina la cuenta atrás (HH:MM, hora local). "" = medianoche.
-    countdownTime: "",
+    countdownTime: "13:00",
 
     // Código de acceso para invitados.
     // OJO: es solo una barrera de la interfaz. La seguridad real está en
@@ -29,26 +29,44 @@ export const weddingConfig = {
     accessCode: "IvAngela2026",
 
     ceremony: {
-        name: "",       // Ej.: nombre de la iglesia / lugar
-        address: "",    // Dirección completa
-        time: "",       // Ej.: "12:30"
-        mapsUrl: ""     // Enlace de Google Maps (si está vacío se genera a partir de la dirección)
+        name: "Finca Sansui · Salón Hortal",   // Nombre del lugar
+        address: "Calle de Alberto Einstein, Villanueva de Gállego (Aragón)",
+        time: "13:00 · Ceremonia civil",
+        mapsUrl: "https://maps.app.goo.gl/LhUAsVidGZPLcRzY6" // Si está vacío se genera a partir de la dirección
     },
 
     reception: {
-        name: "",
-        address: "",
-        time: "",
-        mapsUrl: ""
+        name: "Finca Sansui · Salón Hortal",
+        address: "Calle de Alberto Einstein, Villanueva de Gállego (Aragón)",
+        time: "14:15 · Cóctel · 16:00 · Comida",
+        mapsUrl: "https://maps.app.goo.gl/LhUAsVidGZPLcRzY6"
     },
 
     // Programa del día. Añade tantas entradas como quieras.
-    // Ejemplo: { time: "12:30", title: "Ceremonia", description: "" }
-    schedule: [],
+    schedule: [
+        { time: "12:30", title: "Salida de los autobuses", description: "Desde el Museo Pablo Gargallo" },
+        { time: "13:00", title: "Ceremonia civil", description: "" },
+        { time: "14:15", title: "Cóctel", description: "" },
+        { time: "16:00", title: "Comida", description: "" },
+        { time: "19:00", title: "Fiestón", description: "" },
+        { time: "23:00", title: "Fin de fiesta", description: "" }
+    ],
 
     // Información adicional (dress code, alojamiento, transporte...).
-    // Ejemplo: { title: "Dress code", text: "..." }
-    extraInfo: [],
+    extraInfo: [
+        {
+            title: "🚌 Autobuses",
+            text: "Autocares Murillo, con salida desde el Museo Pablo Gargallo a las 12:30. Rogamos estar allí 15 minutos antes de la salida."
+        },
+        {
+            title: "🚗 Aparcamiento",
+            text: "La propia finca tiene aparcamiento."
+        },
+        {
+            title: "👔 Código de vestimenta",
+            text: "No hay código de vestimenta."
+        }
+    ],
 
     texts: {
         gateTagline: "Comparte tus recuerdos con nosotros ❤️",
