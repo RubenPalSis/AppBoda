@@ -5,7 +5,7 @@ rules_version = '2';
 //
 //  Cada archivo guarda en sus metadatos el UID de quien lo subió
 //  (customMetadata.ownerId). Solo ese UID, o un administrador, puede borrarlo.
-//  Los archivos no se pueden sobrescribir.
+//  Los archivos no se pueden sobrescribir (ni siquiera su dueño).
 // =====================================================================
 service firebase.storage {
   match /b/{bucket}/o {
@@ -21,8 +21,12 @@ service firebase.storage {
         && firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid));
     }
 
+    // OJO: en Storage, sobrescribir un archivo existente cuenta como "create"
+    // (no como "update"). "resource == null" exige que el archivo NO exista,
+    // así nadie puede reemplazar la foto de otro invitado.
     function validUpload(fileName, maxBytes) {
       return signedIn()
+        && resource == null
         && fileName.matches('photo_[0-9]+_[a-z0-9]+[.]jpg')
         && request.resource.size < maxBytes
         && request.resource.contentType == 'image/jpeg'
@@ -38,7 +42,7 @@ service firebase.storage {
     match /weddings/{weddingId}/photos/{fileName} {
       allow read: if signedIn();
       allow create: if validUpload(fileName, 4 * 1024 * 1024);
-      allow update: if false;
+      allow update: if false;   // solo afecta a cambios de metadatos
       allow delete: if canDelete();
     }
 
@@ -46,7 +50,7 @@ service firebase.storage {
     match /weddings/{weddingId}/thumbs/{fileName} {
       allow read: if signedIn();
       allow create: if validUpload(fileName, 600 * 1024);
-      allow update: if false;
+      allow update: if false;   // solo afecta a cambios de metadatos
       allow delete: if canDelete();
     }
 

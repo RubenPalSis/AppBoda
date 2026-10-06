@@ -139,7 +139,7 @@ export function saveBlob(blob, filename) {
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 5000);
 }
 
-/** Obtiene una foto de Storage como Blob (requiere CORS configurado en el bucket, ver README). */
+/** Obtiene un archivo como Blob (las fotos llegan como URLs blob: locales, ver photos.js). */
 export async function fetchBlob(url) {
     const res = await fetch(url, { mode: "cors", cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -150,7 +150,7 @@ export async function fetchBlob(url) {
  * Descarga una foto.
  * - En móvil, si el navegador lo permite, abre el menú "Compartir" (permite "Guardar imagen" en iPhone).
  * - Si no, descarga el archivo.
- * - Si falla (p. ej. CORS sin configurar), abre la foto en una pestaña nueva.
+ * - Si falla, abre la foto en una pestaña nueva.
  */
 export async function downloadPhoto(url, filename) {
     let blob;
@@ -183,7 +183,8 @@ export function friendlyError(err) {
     const code = err?.code || "";
     if (code.includes("permission-denied") || code.includes("unauthorized")) return "No tienes permiso para realizar esta acción.";
     if (code.includes("unavailable") || code.includes("network")) return "Sin conexión. Revisa tu red e inténtalo de nuevo.";
-    if (code.includes("quota") || code.includes("resource-exhausted")) return "Se ha alcanzado el límite del servicio. Inténtalo más tarde.";
+    if (code.includes("quota") || code.includes("resource-exhausted")) return "Se ha alcanzado el límite gratuito de hoy. Inténtalo de nuevo más tarde.";
+    if (code === "not-found") return "Esta foto ya no existe.";
     if (code.includes("operation-not-allowed") || code.includes("admin-restricted")) return "El acceso de invitados no está activado en Firebase (Authentication → Anónimo).";
     return "Ha ocurrido un error. Inténtalo de nuevo.";
 }

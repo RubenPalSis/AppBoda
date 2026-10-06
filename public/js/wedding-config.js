@@ -25,7 +25,7 @@ export const weddingConfig = {
 
     // Código de acceso para invitados.
     // OJO: es solo una barrera de la interfaz. La seguridad real está en
-    // firestore.rules y storage.rules.
+    // firestore.rules.
     accessCode: "IvAngela2026",
 
     ceremony: {
@@ -90,18 +90,22 @@ export const weddingConfig = {
         beige: "#e8dccb"
     },
 
-    // Límites de subida.
+    // Límites de subida. Plan Spark (gratuito): las fotos se guardan en Firestore,
+    // que tiene 1 GiB gratis y documentos de 1 MiB como máximo. Con ~300 KB por foto
+    // caben unas 3.000. Si subes estos valores, caben menos fotos.
     upload: {
         maxFilesPerUpload: 20,          // Fotos por operación
         maxOriginalSizeMB: 40,          // Se rechazan originales más grandes
-        maxSide: 1800,                  // Lado más largo de la foto final (px)
-        quality: 0.78,                  // Calidad JPEG (0-1)
-        thumbMaxSide: 480,              // Miniatura para la galería
-        thumbQuality: 0.7
+        maxSide: 1600,                  // Lado más largo de la foto final (px)
+        quality: 0.75,                  // Calidad JPEG inicial (0-1)
+        maxBytes: 450 * 1024,           // Tope por foto: si pesa más, se baja calidad/tamaño
+        thumbMaxSide: 360,              // Miniatura para la galería
+        thumbQuality: 0.6,
+        thumbMaxBytes: 60 * 1024
     },
 
     gallery: {
-        pageSize: 30                    // Fotos cargadas por bloque (scroll infinito)
+        pageSize: 24                    // Fotos cargadas por bloque (scroll infinito)
     },
 
     admin: {

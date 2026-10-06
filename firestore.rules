@@ -3,6 +3,7 @@ rules_version = '2';
 // =====================================================================
 //  Reglas de Firestore — App de boda
 //
+//  Plan Spark (gratuito): las fotos se guardan en Firestore (no hay Storage).
 //  Los invitados usan Firebase Authentication ANÓNIMO (sin datos
 //  personales): cada dispositivo tiene un UID único → request.auth.uid.
 //  El administrador usa email/contraseña y su UID debe existir como
@@ -29,6 +30,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/photos/$(photoId)/likes/$(request.auth.uid);
     }
 
+    function fileDoc(photoId) {
+      return /databases/$(database)/documents/photoFiles/$(photoId);
+    }
+
     // ---------- Administradores ----------
     // Cada usuario solo puede comprobar si ÉL es admin. Nadie puede escribir
     // desde la app (los admins se crean desde Firebase Console).
@@ -43,22 +48,25 @@ service cloud.firestore {
       // Cualquier dispositivo con sesión (invitado o admin) puede ver la galería.
       allow read: if signedIn();
 
-      // Crear: solo a nombre propio, con likes = 0, fecha del servidor y
-      // únicamente los campos esperados.
+      // Crear: solo a nombre propio, con likes = 0, fecha del servidor,
+      // únicamente los campos esperados y una miniatura JPEG pequeña (bytes,
+      // nunca URLs ni texto). La foto completa (photoFiles/{photoId}) debe
+      // crearse en el MISMO lote y con el mismo dueño.
       allow create: if signedIn()
         && photoId.matches('photo_[0-9]+_[a-z0-9]+')
         && request.resource.data.keys().hasOnly([
-             'storagePath', 'thumbPath', 'downloadURL', 'thumbURL', 'ownerId',
-             'createdAt', 'likes', 'width', 'height', 'size'])
+             'ownerId', 'createdAt', 'likes', 'width', 'height', 'size', 'thumb'])
         && request.resource.data.keys().hasAll([
-             'storagePath', 'thumbPath', 'downloadURL', 'thumbURL', 'ownerId', 'createdAt', 'likes'])
+             'ownerId', 'createdAt', 'likes', 'width', 'height', 'size', 'thumb'])
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.likes == 0
         && request.resource.data.createdAt == request.time
-        && request.resource.data.storagePath.matches('weddings/[a-z0-9-]+/photos/' + photoId + '[.]jpg')
-        && request.resource.data.thumbPath.matches('weddings/[a-z0-9-]+/thumbs/' + photoId + '[.]jpg')
-        && request.resource.data.downloadURL is string && request.resource.data.downloadURL.size() < 2048
-        && request.resource.data.thumbURL is string && request.resource.data.thumbURL.size() < 2048;
+        && request.resource.data.width is int
+        && request.resource.data.height is int
+        && request.resource.data.size is int
+        && request.resource.data.thumb is bytes
+        && request.resource.data.thumb.size() < 80 * 1024
+        && getAfter(fileDoc(photoId)).data.ownerId == request.auth.uid;
 
       // Actualizar: SOLO el contador de likes, y solo +1 si a la vez se crea
       // el like del propio UID (o -1 si se borra). Ver /likes más abajo.
@@ -72,9 +80,11 @@ service cloud.firestore {
              && exists(likeDoc(photoId)) && !existsAfter(likeDoc(photoId)))
         );
 
-      // Eliminar: el dueño de la foto o el administrador.
+      // Eliminar: el dueño de la foto o el administrador, y siempre junto con
+      // su archivo (photoFiles/{photoId}) para no dejar datos huérfanos.
       allow delete: if signedIn()
-        && (resource.data.ownerId == request.auth.uid || isAdmin());
+        && (resource.data.ownerId == request.auth.uid || isAdmin())
+        && !existsAfter(fileDoc(photoId));
 
       // ---------- Likes: photos/{photoId}/likes/{uid} ----------
       // El ID del documento ES el UID → imposible dar dos likes con el mismo dispositivo.
@@ -96,6 +106,30 @@ service cloud.firestore {
 
         allow update: if false;
       }
+    }
+
+    // ---------- Archivos de las fotos: photoFiles/{photoId} ----------
+    // La foto comprimida (bytes JPEG). Se crea en el mismo lote que photos/{photoId}.
+    // Límite de 900 KB: un documento de Firestore admite como máximo 1 MiB.
+    match /photoFiles/{photoId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['ownerId', 'data'])
+        && request.resource.data.keys().hasAll(['ownerId', 'data'])
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.data is bytes
+        && request.resource.data.data.size() < 900 * 1024
+        && !exists(photoDoc(photoId))
+        && getAfter(photoDoc(photoId)).data.ownerId == request.auth.uid;
+
+      // Nadie puede sustituir el archivo de otro (ni el suyo propio).
+      allow update: if false;
+
+      // Borrar: el dueño o el administrador, siempre junto con photos/{photoId}.
+      allow delete: if signedIn()
+        && (resource.data.ownerId == request.auth.uid || isAdmin())
+        && !existsAfter(photoDoc(photoId));
     }
 
     // Todo lo demás, denegado.

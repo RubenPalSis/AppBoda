@@ -5,7 +5,7 @@
  *
  * IMPORTANTE: cambia CACHE_VERSION cada vez que despliegues cambios.
  */
-const CACHE_VERSION = "v1.0.1";
+const CACHE_VERSION = "v1.2.0";
 const SHELL_CACHE = `boda-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `boda-runtime-${CACHE_VERSION}`;
 

@@ -1,16 +1,23 @@
 /**
  * Galería de invitados (tiempo real, carga progresiva) y visor/lightbox.
+ *
+ * Para gastar pocas lecturas de Firestore (plan Spark: 50.000/día):
+ *  - Solo se escucha en tiempo real el bloque de fotos más recientes.
+ *  - Las anteriores se piden una única vez al hacer scroll (cursor startAfter),
+ *    sin volver a leer las que ya están cargadas.
+ *  - La foto completa (photoFiles) solo se lee al abrirla en el visor.
  */
 import { weddingConfig } from "./wedding-config.js";
-import { $, showToast, confirmDialog, downloadPhoto, photoFilename, friendlyError } from "./utils.js";
+import { $, escapeHtml, showToast, confirmDialog, downloadPhoto, photoFilename, friendlyError } from "./utils.js";
 import { currentUid } from "./auth.js";
-import { subscribePhotos, deletePhoto } from "./photos.js";
+import { subscribePhotos, fetchOlderPhotos, getFullImageUrl, deletePhoto, releasePhoto } from "./photos.js";
 import { hasLiked, toggleLike } from "./likes.js";
 
 const pageSize = weddingConfig.gallery.pageSize;
 
-let photos = [];
-let maxPhotos = pageSize;
+let photos = [];          // todas las fotos cargadas, de más reciente a más antigua
+let older = new Map();    // id -> foto cargada fuera del bloque en tiempo real
+let live = [];            // bloque en tiempo real (las pageSize más recientes)
 let hasMore = false;
 let unsubscribe = null;
 let loadingMore = false;
@@ -42,32 +49,74 @@ export function initGallery() {
     subscribe();
 }
 
+const byNewest = (a, b) => (b.createdAt || Infinity) - (a.createdAt || Infinity);
+
+function rebuild() {
+    const liveIds = new Set(live.map(p => p.id));
+    photos = [...live, ...[...older.values()].filter(p => !liveIds.has(p.id))].sort(byNewest);
+}
+
+function forget(id) {
+    older.delete(id);
+    releasePhoto(id);
+}
+
 function subscribe() {
+    let first = true;
     unsubscribe?.();
-    unsubscribe = subscribePhotos(maxPhotos, list => {
-        photos = list;
-        hasMore = list.length >= maxPhotos;
-        loadingMore = false;
+    unsubscribe = subscribePhotos(pageSize, (list, removed) => {
+        // Una foto que sale del bloque en tiempo real puede haber sido BORRADA o
+        // simplemente desplazada por otra más nueva. Si es más antigua que la última
+        // del bloque (y el bloque está lleno), se ha desplazado: se conserva.
+        const full = list.length >= pageSize;
+        const oldest = list[list.length - 1]?.createdAt || 0;
+        for (const p of removed) {
+            if (full && p.createdAt && p.createdAt <= oldest) older.set(p.id, p);
+            else forget(p.id);
+        }
+        live = list;
+        if (first) { hasMore = full; first = false; }
+        rebuild();
         render();
         refreshLightbox();
     }, err => {
         console.error(err);
-        loadingMore = false;
         showToast(friendlyError(err), "error", 6000);
     });
 }
 
-function loadMore() {
+async function loadMore() {
     if (!hasMore || loadingMore) return;
+    const last = [...photos].reverse().find(p => p.createdAtTs);
+    if (!last) return;
     loadingMore = true;
-    maxPhotos += pageSize;
-    subscribe();
+    try {
+        const list = await fetchOlderPhotos(last.createdAtTs, pageSize);
+        list.forEach(p => older.set(p.id, p));
+        hasMore = list.length >= pageSize;
+        rebuild();
+        render();
+        refreshLightbox();
+    } catch (err) {
+        console.error(err);
+        showToast(friendlyError(err), "error", 6000);
+    } finally {
+        loadingMore = false;
+    }
+}
+
+/** Quita una foto de la galería al momento (borrada por mí o ya inexistente). */
+function dropPhoto(id) {
+    live = live.filter(p => p.id !== id);
+    forget(id);
+    rebuild();
+    render();
 }
 
 function tileHtml(photo, isOwn) {
     return `
-        <img src="${photo.thumbURL || photo.downloadURL}" alt="Foto de la boda" loading="lazy" decoding="async"
-             width="${photo.width || 3}" height="${photo.height || 4}">
+        <img src="${escapeHtml(photo.thumbURL)}" alt="Foto de la boda" loading="lazy" decoding="async"
+             width="${Number(photo.width) || 3}" height="${Number(photo.height) || 4}">
         ${isOwn ? `<span class="tile__own">Tuya</span>` : ""}
         <span class="tile__likes" aria-label="${photo.likes || 0} me gusta">❤️ ${photo.likes || 0}</span>`;
 }
@@ -189,10 +238,19 @@ async function showCurrent() {
     const changed = lb.id !== photo.id;
     lb.id = photo.id;
     if (changed) {
-        // Mientras carga la foto completa, se muestra la miniatura (ya en caché).
-        lb.img.style.backgroundImage = `url("${photo.thumbURL}")`;
-        lb.img.src = photo.downloadURL;
+        // Mientras carga la foto completa se muestra la miniatura (ya en memoria).
+        lb.img.src = photo.thumbURL;
         lb.likeBtn.classList.remove("is-liked");
+        getFullImageUrl(photo.id)
+            .then(url => { if (lb.id === photo.id) lb.img.src = url; })
+            .catch(err => {
+                console.warn(err);
+                if (err.code === "not-found" && lb.id === photo.id) {
+                    showToast("Esta foto ya no existe", "warning");
+                    dropPhoto(photo.id);
+                    refreshLightbox();
+                }
+            });
     }
     lb.likes.textContent = `❤️ ${photo.likes || 0}`;
     lb.counter.textContent = `${lb.index + 1} / ${photos.length}${hasMore ? "+" : ""}`;
@@ -229,6 +287,13 @@ async function onLike() {
     try {
         const liked = await toggleLike(photo.id);
         setLikedUI(liked);
+        // Las fotos fuera del bloque en tiempo real no se actualizan solas.
+        const stored = older.get(photo.id);
+        if (stored && !live.some(p => p.id === photo.id)) {
+            stored.likes = Math.max(0, (stored.likes || 0) + (liked ? 1 : -1));
+            render();
+            lb.likes.textContent = `❤️ ${stored.likes}`;
+        }
         if (liked) {
             lb.likeBtn.classList.remove("pop");
             void lb.likeBtn.offsetWidth;
@@ -247,7 +312,10 @@ async function onDownload() {
     if (!photo) return;
     lb.downloadBtn.disabled = true;
     try {
-        await downloadPhoto(photo.downloadURL, photoFilename(photo));
+        await downloadPhoto(await getFullImageUrl(photo.id), photoFilename(photo));
+    } catch (err) {
+        console.error(err);
+        showToast(friendlyError(err), "error");
     } finally {
         lb.downloadBtn.disabled = false;
     }
@@ -267,8 +335,7 @@ async function onDelete() {
     try {
         await deletePhoto(photo);
         // Se quita al momento; el listener en tiempo real lo confirmará.
-        photos = photos.filter(p => p.id !== photo.id);
-        render();
+        dropPhoto(photo.id);
         if (photos.length === 0) closeLightbox();
         else { lb.index = Math.min(lb.index, photos.length - 1); lb.id = null; showCurrent(); }
         showToast("Foto eliminada", "success");

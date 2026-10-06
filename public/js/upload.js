@@ -1,5 +1,6 @@
 /**
- * Subida de fotos: selección, compresión en el dispositivo, previsualización y subida.
+ * Subida de fotos: selección, compresión en el dispositivo, previsualización y subida
+ * (a Firestore: ver photos.js).
  *
  * Compresión: la imagen se decodifica con <img> (los navegadores actuales aplican
  * automáticamente la orientación EXIF al dibujarla), se redimensiona en un <canvas>
@@ -124,12 +125,29 @@ function renderToJpeg(img, maxSide, quality) {
     });
 }
 
+/**
+ * Comprime hasta que el JPEG no supere maxBytes: primero baja la calidad (hasta 0,5)
+ * y después la resolución. Necesario porque la foto se guarda en un documento de
+ * Firestore (máx. 1 MiB) y cuenta para el 1 GiB gratuito.
+ */
+async function renderWithinLimit(img, maxSide, quality, maxBytes) {
+    let side = maxSide;
+    let q = quality;
+    for (let attempt = 0; attempt < 10; attempt++) {
+        const result = await renderToJpeg(img, side, q);
+        if (result.blob.size <= maxBytes) return result;
+        if (q > 0.55) q = Math.max(0.5, q - 0.1);
+        else side = Math.round(side * 0.8);
+    }
+    throw new Error("No se pudo comprimir lo suficiente");
+}
+
 /** Comprime una imagen y genera su miniatura. */
 export async function processImage(file) {
     const { img, url } = await loadImage(file);
     try {
-        const main = await renderToJpeg(img, cfg.maxSide, cfg.quality);
-        const thumb = await renderToJpeg(img, cfg.thumbMaxSide, cfg.thumbQuality);
+        const main = await renderWithinLimit(img, cfg.maxSide, cfg.quality, cfg.maxBytes);
+        const thumb = await renderWithinLimit(img, cfg.thumbMaxSide, cfg.thumbQuality, cfg.thumbMaxBytes);
         return { blob: main.blob, width: main.width, height: main.height, thumbBlob: thumb.blob };
     } finally {
         URL.revokeObjectURL(url);

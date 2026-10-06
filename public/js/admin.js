@@ -5,7 +5,7 @@
  *   contraseñas en el código.
  * - Solo se considera administrador a un usuario cuyo UID exista como documento
  *   en la colección "admins" de Firestore (se crea a mano desde la consola, ver README).
- *   Las reglas de Firestore/Storage hacen la misma comprobación, así que entrar en
+ *   Las reglas de Firestore hacen la misma comprobación, así que entrar en
  *   /admin.html sin serlo no da acceso a nada.
  */
 import { weddingConfig } from "./wedding-config.js";
@@ -13,10 +13,10 @@ import {
     auth, db, doc, getDoc, onAuthStateChanged, signInWithEmailAndPassword,
     sendPasswordResetEmail, signOut, isFirebaseConfigured
 } from "./firebase-config.js";
-import { subscribePhotos, deletePhoto } from "./photos.js";
+import { subscribePhotos, deletePhoto, getFullImageUrl, getFullImageBlob, releasePhoto } from "./photos.js";
 import {
     $, $$, applyTheme, showToast, confirmDialog, formatBytes, formatDateTime,
-    downloadPhoto, photoFilename, fetchBlob, saveBlob, escapeHtml
+    downloadPhoto, photoFilename, saveBlob, escapeHtml, friendlyError
 } from "./utils.js";
 
 const JSZIP_URL = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
@@ -96,7 +96,8 @@ async function onUser(user) {
     $("#dashboard").hidden = false;
     $("#admin-email").textContent = user.email || "";
     unsubscribe?.();
-    unsubscribe = subscribePhotos(null, list => {
+    unsubscribe = subscribePhotos(null, (list, removed) => {
+        removed.forEach(p => releasePhoto(p.id));
         photos = list;
         for (const id of selected) if (!photos.some(p => p.id === id)) selected.delete(id);
         render();
@@ -127,7 +128,7 @@ function render() {
     $("#admin-empty").hidden = list.length > 0;
     $("#admin-grid").innerHTML = list.map(p => `
         <article class="admin-card ${selected.has(p.id) ? "is-selected" : ""}" data-id="${p.id}">
-            <img class="admin-card__img" src="${escapeHtml(p.thumbURL || p.downloadURL)}" alt="Foto" loading="lazy" data-open>
+            <img class="admin-card__img" src="${escapeHtml(p.thumbURL)}" alt="Foto" loading="lazy" data-open>
             <label class="admin-card__check"><input type="checkbox" data-select ${selected.has(p.id) ? "checked" : ""} aria-label="Seleccionar foto"></label>
             <div class="admin-card__meta"><span>❤️ ${p.likes || 0}</span><span>${formatDateTime(p.createdAt)}</span></div>
             <div class="admin-card__actions">
@@ -159,8 +160,18 @@ function initGrid() {
         if (!card) return;
         const photo = photos.find(p => p.id === card.dataset.id);
         if (!photo) return;
-        if (e.target.closest("[data-open]")) window.open(photo.downloadURL, "_blank", "noopener");
-        if (e.target.closest("[data-download]")) downloadPhoto(photo.downloadURL, photoFilename(photo));
+        if (e.target.closest("[data-open]")) {
+            // La pestaña se abre ya (si no, el navegador la bloquea) y luego se carga la foto.
+            const win = window.open("", "_blank");
+            getFullImageUrl(photo.id)
+                .then(url => { if (win) win.location.href = url; else window.location.href = url; })
+                .catch(err => { win?.close(); showToast(friendlyError(err), "error"); });
+        }
+        if (e.target.closest("[data-download]")) {
+            getFullImageUrl(photo.id)
+                .then(url => downloadPhoto(url, photoFilename(photo)))
+                .catch(err => showToast(friendlyError(err), "error"));
+        }
         if (e.target.closest("[data-delete]")) removePhotos([photo]);
     });
 
@@ -251,7 +262,7 @@ async function downloadZip(list) {
                     const photo = chunk[next++];
                     const number = ordered.indexOf(photo) + 1;
                     try {
-                        const blob = await fetchBlob(photo.downloadURL);
+                        const blob = await getFullImageBlob(photo.id);
                         folder.file(`foto-${String(number).padStart(digits, "0")}.jpg`, blob, { binary: true });
                     } catch (err) {
                         console.warn("No se pudo descargar", photo.id, err);
@@ -273,7 +284,7 @@ async function downloadZip(list) {
 
         if (cancelled) showToast("Descarga cancelada", "warning");
         else if (failed.length === ordered.length) {
-            showToast("No se pudo descargar ninguna foto. ¿Has configurado CORS en Storage? (ver README)", "error", 9000);
+            showToast("No se pudo descargar ninguna foto. Revisa la conexión y la cuota de Firestore (ver README).", "error", 9000);
         } else if (failed.length) {
             showToast(`ZIP generado. ${failed.length} fotos no se pudieron incluir.`, "warning", 7000);
         } else {
