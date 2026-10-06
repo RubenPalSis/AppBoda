@@ -45,6 +45,20 @@ export function formatDateTime(date) {
     return new Intl.DateTimeFormat("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
+const rtf = new Intl.RelativeTimeFormat("es", { numeric: "auto" });
+
+/** "ahora", "hace 5 min", "hace 2 h", "ayer"… (como en las redes sociales). */
+export function timeAgo(date) {
+    if (!date) return "";
+    const s = Math.round((date - Date.now()) / 1000);
+    const abs = Math.abs(s);
+    if (abs < 45) return "ahora";
+    if (abs < 3600) return rtf.format(Math.round(s / 60), "minute");
+    if (abs < 86400) return rtf.format(Math.round(s / 3600), "hour");
+    if (abs < 7 * 86400) return rtf.format(Math.round(s / 86400), "day");
+    return new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short" }).format(date);
+}
+
 /** Enlace de Google Maps para un lugar de la configuración ("" si no hay datos). */
 export function mapsLink(place) {
     if (!place) return "";

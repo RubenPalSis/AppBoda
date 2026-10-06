@@ -11,14 +11,15 @@
  */
 import { weddingConfig } from "./wedding-config.js";
 import {
-    db, collection, doc, getDoc, getDocs, query, orderBy, limit, startAfter,
-    onSnapshot, serverTimestamp, writeBatch, Bytes
+    db, collection, doc, getDoc, getDocs, query, where, orderBy, limit, startAfter,
+    onSnapshot, serverTimestamp, writeBatch, Bytes, Timestamp
 } from "./firebase-config.js";
 
 export const PHOTOS = "photos";
 export const PHOTO_FILES = "photoFiles";
 
 const JPEG = "image/jpeg";
+const store = new Map();       // id -> objeto foto compartido por todas las vistas
 const thumbUrls = new Map();   // id -> blob: URL de la miniatura
 const fullUrls = new Map();    // id -> blob: URL de la foto completa (caché limitada)
 const MAX_FULL_CACHED = 25;
@@ -28,26 +29,46 @@ function bytesToUrl(bytes) {
 }
 
 function thumbUrl(id, bytes) {
-    if (!thumbUrls.has(id) && bytes) thumbUrls.set(id, bytesToUrl(bytes));
+    // Solo bytes reales: un documento mal formado (que las reglas rechazarán) se ignora.
+    if (!thumbUrls.has(id) && typeof bytes?.toUint8Array === "function") thumbUrls.set(id, bytesToUrl(bytes));
     return thumbUrls.get(id) || "";
 }
 
 /** Libera la memoria de una foto que ya no se muestra (borrada). */
 export function releasePhoto(id) {
+    store.delete(id);
     for (const map of [thumbUrls, fullUrls]) {
         if (map.has(id)) { URL.revokeObjectURL(map.get(id)); map.delete(id); }
     }
 }
 
+/**
+ * Convierte un documento en el objeto foto. Siempre devuelve el MISMO objeto para el
+ * mismo id (actualizando sus campos), así el feed, el tablón, las historias y el visor
+ * comparten likes y estado.
+ */
 function toPhoto(snapshot) {
     const { thumb, createdAt, ...data } = snapshot.data({ serverTimestamps: "estimate" });
-    return {
+    const fresh = {
         id: snapshot.id,
         ...data,
         createdAtTs: createdAt || null,                 // Timestamp, para paginar
         createdAt: createdAt?.toDate?.() || null,
         thumbURL: thumbUrl(snapshot.id, thumb)
     };
+    const existing = store.get(snapshot.id);
+    if (existing) return Object.assign(existing, fresh);
+    store.set(snapshot.id, fresh);
+    return fresh;
+}
+
+/**
+ * Aplica un cambio de likes hecho desde este dispositivo a una foto que NO está en una
+ * escucha en tiempo real (en las que sí lo están, Firestore ya lo aplica solo).
+ */
+export function adjustLikes(id, delta) {
+    const photo = store.get(id);
+    if (photo && !photo.live) photo.likes = Math.max(0, (photo.likes || 0) + delta);
 }
 
 const newestFirst = orderBy("createdAt", "desc");
@@ -64,7 +85,10 @@ export function subscribePhotos(max, onData, onError) {
     const q = query(collection(db, PHOTOS), ...constraints);
     return onSnapshot(q, snap => {
         const removed = snap.docChanges().filter(c => c.type === "removed").map(c => toPhoto(c.doc));
-        onData(snap.docs.map(toPhoto), removed, snap);
+        removed.forEach(p => { p.live = false; });
+        const list = snap.docs.map(toPhoto);
+        list.forEach(p => { p.live = true; });
+        onData(list, removed, snap);
     }, onError);
 }
 
@@ -79,10 +103,29 @@ export async function fetchOlderPhotos(beforeTs, max) {
     return snap.docs.map(toPhoto);
 }
 
+/**
+ * Fotos subidas entre dos fechas, de más antigua a más reciente (historias por momento).
+ * Solo usa el índice automático de createdAt.
+ */
+export async function fetchPhotosBetween(start, end, max) {
+    const q = query(collection(db, PHOTOS),
+        where("createdAt", ">=", Timestamp.fromDate(start)),
+        where("createdAt", "<", Timestamp.fromDate(end)),
+        orderBy("createdAt", "asc"),
+        limit(max));
+    return (await getDocs(q)).docs.map(toPhoto);
+}
+
+/** Las fotos con más likes (historia "Las más queridas"). */
+export async function fetchTopPhotos(max) {
+    const q = query(collection(db, PHOTOS), orderBy("likes", "desc"), limit(max));
+    return (await getDocs(q)).docs.map(toPhoto).filter(p => p.likes > 0);
+}
+
 /** Devuelve la foto completa como Blob (sin caché; lo usa el ZIP del administrador). */
 export async function getFullImageBlob(id) {
     const snap = await getDoc(doc(db, PHOTO_FILES, id));
-    if (!snap.exists()) {
+    if (!snap.exists() || typeof snap.data().data?.toUint8Array !== "function") {
         const err = new Error("La foto ya no existe");
         err.code = "not-found";
         throw err;

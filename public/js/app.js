@@ -1,15 +1,19 @@
 /**
- * Arranque de la app de invitados: pantalla de acceso, navegación, portada,
- * cuenta atrás, información de la boda e instalación como PWA.
+ * Arranque de la app de invitados: pantalla de acceso, navegación (Inicio, Tablón,
+ * ＋, Boda, Tú), cuenta atrás, información de la boda, perfil e instalación como PWA.
  */
 import { weddingConfig } from "./wedding-config.js";
 import { isFirebaseConfigured } from "./firebase-config.js";
-import { $, $$, escapeHtml, formatWeddingDate, getWeddingDate, mapsLink, applyTheme, isIOS, isStandalone, showToast, friendlyError } from "./utils.js";
-import { checkAccessCode, isDeviceAuthorized, authorizeDevice, logoutGuest, ensureGuestSession } from "./auth.js";
-import { initGallery } from "./gallery.js";
+import { $, $$, escapeHtml, formatWeddingDate, getWeddingDate, mapsLink, applyTheme, showToast, friendlyError } from "./utils.js";
+import { checkAccessCode, isDeviceAuthorized, authorizeDevice, logoutGuest, ensureGuestSession, currentUid } from "./auth.js";
+import { initGallery, setGalleryView } from "./gallery.js";
+import { initStories } from "./stories.js";
 import { initUpload } from "./upload.js";
+import { isViewerOpen, closeViewer } from "./viewer.js";
+import { aliasFor } from "./identity.js";
 
-const VIEWS = ["inicio", "galeria", "subir", "boda", "mas"];
+const VIEWS = ["inicio", "tablon", "subir", "boda", "mas"];
+const ALIASES = { galeria: "inicio" };   // enlaces antiguos
 let appStarted = false;
 
 /* ---------------- Textos de la configuración ---------------- */
@@ -25,10 +29,9 @@ function fillStaticTexts() {
     });
     document.title = weddingConfig.coupleNames;
     if (weddingConfig.heroImage) {
-        $$(".hero").forEach(el => {
-            el.style.setProperty("--hero-image", `url("${weddingConfig.heroImage}")`);
-            el.classList.add("hero--image");
-        });
+        const gate = $("#gate");
+        gate.style.setProperty("--hero-image", `url(${JSON.stringify(weddingConfig.heroImage)})`);
+        gate.classList.add("has-image");
     }
 }
 
@@ -38,7 +41,7 @@ function initGate() {
     const form = $("#gate-form");
     const input = $("#gate-code");
     const error = $("#gate-error");
-    form.addEventListener("submit", async e => {
+    form.addEventListener("submit", e => {
         e.preventDefault();
         error.textContent = "";
         if (!checkAccessCode(input.value)) {
@@ -59,13 +62,11 @@ function initGate() {
 function showGate() {
     $("#app").hidden = true;
     $("#gate").hidden = false;
-    document.body.classList.remove("is-app");
 }
 
 function showApp() {
     $("#gate").hidden = true;
     $("#app").hidden = false;
-    document.body.classList.add("is-app");
     route();
     if (appStarted) return;
     appStarted = true;
@@ -75,8 +76,16 @@ function showApp() {
     }
     ensureGuestSession()
         .then(() => {
+            renderProfile();
             initGallery();
-            initUpload({ onUploaded: () => { location.hash = "#galeria"; } });
+            setGalleryView(currentView());
+            initStories();
+            initUpload({
+                onUploaded: n => {
+                    location.hash = "#inicio";
+                    showToast(n === 1 ? "¡Foto publicada! 🎉" : `¡${n} fotos publicadas! 🎉`, "success", 4000);
+                }
+            });
         })
         .catch(err => {
             console.error(err);
@@ -86,52 +95,70 @@ function showApp() {
 
 /* ---------------- Navegación ---------------- */
 
-function route() {
+function currentView() {
     const name = location.hash.replace("#", "");
-    const view = VIEWS.includes(name) ? name : "inicio";
-    VIEWS.forEach(v => {
-        const section = $(`#view-${v}`);
-        const active = v === view;
-        section.hidden = !active;
-        section.classList.toggle("is-active", active);
-    });
+    const view = ALIASES[name] || name;
+    return VIEWS.includes(view) ? view : "inicio";
+}
+
+function route() {
+    if (isViewerOpen() && !history.state?.viewer) closeViewer();
+    const view = currentView();
+    VIEWS.forEach(v => { $(`#view-${v}`).hidden = v !== view; });
     $$(".tabbar__item").forEach(a => {
         const active = a.getAttribute("href") === `#${view}`;
         a.classList.toggle("is-active", active);
         if (active) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
+    if (appStarted) setGalleryView(view);
     window.scrollTo(0, 0);
 }
 
-/* ---------------- Cuenta atrás ---------------- */
+/* ---------------- Cuenta atrás: chip, banner y tarjeta ---------------- */
 
 function initCountdown() {
     const target = getWeddingDate();
+    const { texts } = weddingConfig;
+    const chip = $("#countdown-chip");
+    const banner = $("#banner");
     const box = $("#countdown");
     const message = $("#countdown-message");
     const parts = { days: $("#cd-days"), hours: $("#cd-hours"), minutes: $("#cd-minutes"), seconds: $("#cd-seconds") };
     const pad = n => String(n).padStart(2, "0");
+    let lastBanner = "";
+
+    const setBanner = (emoji, title, text) => {
+        const html = `<span class="banner__emoji" aria-hidden="true">${emoji}</span>
+            <div><p class="banner__title">${escapeHtml(title)}</p><p class="banner__text">${escapeHtml(text)}</p></div>`;
+        if (html !== lastBanner) { banner.innerHTML = html; lastBanner = html; }
+    };
 
     const tick = () => {
         const now = new Date();
         const diff = target - now;
+        const sameDay = now.toDateString() === target.toDateString();
         if (diff > 0) {
             const s = Math.floor(diff / 1000);
-            parts.days.textContent = Math.floor(s / 86400);
+            const days = Math.floor(s / 86400);
+            parts.days.textContent = days;
             parts.hours.textContent = pad(Math.floor((s % 86400) / 3600));
             parts.minutes.textContent = pad(Math.floor((s % 3600) / 60));
             parts.seconds.textContent = pad(s % 60);
-            message.textContent = weddingConfig.texts.countdownBefore;
+            message.textContent = texts.countdownBefore;
             box.hidden = false;
-            return true;
+            chip.textContent = days > 0 ? `⏳ ${days} ${days === 1 ? "día" : "días"}` : `⏳ ${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}`;
+            setBanner("⏳", days > 0 ? `¡Faltan ${days} ${days === 1 ? "día" : "días"}!` : "¡Ya casi está!", texts.countdownBefore);
+        } else {
+            box.hidden = true;
+            message.textContent = sameDay ? texts.countdownToday : texts.countdownAfter;
+            chip.textContent = sameDay ? "🎉 Hoy" : "💍";
+            if (sameDay) setBanner("🎉", texts.countdownToday, "Sube tus fotos y mira las historias de cada momento");
+            else setBanner("❤️", texts.countdownAfter, "Revive el día en las historias y en el tablón");
         }
-        box.hidden = true;
-        const sameDay = now.toDateString() === target.toDateString();
-        message.textContent = sameDay ? weddingConfig.texts.countdownToday : weddingConfig.texts.countdownAfter;
-        return sameDay; // seguimos comprobando hasta que pase el día
+        markCurrentMoment(now);
     };
     tick();
-    const timer = setInterval(() => { if (!tick() && new Date() > target) clearInterval(timer); }, 1000);
+    setInterval(tick, 1000);
 }
 
 /* ---------------- Información de la boda ---------------- */
@@ -148,18 +175,21 @@ function placeCard(icon, title, place) {
             <p class="place__meta">🕐 ${place.time ? escapeHtml(place.time) : pending}</p>
             <p class="place__meta">${place.address ? escapeHtml(place.address) : `Dirección: ${pending}`}</p>
             ${link
-                ? `<a class="btn btn--outline" href="${escapeHtml(link)}" target="_blank" rel="noopener">📍 Cómo llegar</a>`
-                : `<button class="btn btn--outline" type="button" disabled>📍 Cómo llegar</button>`}
+                ? `<a class="btn btn--grad" href="${escapeHtml(link)}" target="_blank" rel="noopener"><svg class="i"><use href="#i-pin"/></svg>Cómo llegar</a>`
+                : `<button class="btn btn--ghost" type="button" disabled>📍 Cómo llegar</button>`}
         </article>`;
 }
 
 function renderWeddingInfo() {
     const { ceremony, reception, schedule, extraInfo } = weddingConfig;
-    $("#wedding-places").innerHTML = placeCard("⛪", "Ceremonia", ceremony) + placeCard("🥂", "Banquete", reception);
+    const samePlace = reception?.name === ceremony?.name && reception?.address === ceremony?.address;
+    $("#wedding-places").innerHTML = samePlace
+        ? placeCard("⛪🥂", "Ceremonia y banquete", { ...ceremony, time: [ceremony.time, reception.time].filter(Boolean).join(" · ") })
+        : placeCard("⛪", "Ceremonia", ceremony) + placeCard("🥂", "Banquete", reception);
 
     $("#wedding-schedule").innerHTML = schedule.length
-        ? schedule.map(s => `
-            <li class="timeline__item">
+        ? schedule.map((s, i) => `
+            <li class="timeline__item" data-i="${i}">
                 <span class="timeline__time">${s.time ? escapeHtml(s.time) : "--:--"}</span>
                 <div><strong>${escapeHtml(s.title || "")}</strong>${s.description ? `<p>${escapeHtml(s.description)}</p>` : ""}</div>
             </li>`).join("")
@@ -170,38 +200,49 @@ function renderWeddingInfo() {
         : `<article class="card"><p class="muted">Pronto añadiremos más información.</p></article>`;
 }
 
-/* ---------------- PWA ---------------- */
+/** Resalta en el programa el momento que se está viviendo (solo el día de la boda). */
+function markCurrentMoment(now) {
+    const target = getWeddingDate();
+    const items = $$("#wedding-schedule .timeline__item");
+    let current = -1;
+    if (now.toDateString() === target.toDateString()) {
+        weddingConfig.schedule.forEach((s, i) => {
+            const [hh, mm] = String(s.time || "").split(":").map(Number);
+            const t = new Date(target);
+            t.setHours(hh || 0, mm || 0, 0, 0);
+            if (t <= now) current = i;
+        });
+    }
+    items.forEach((li, i) => li.classList.toggle("is-now", i === current));
+}
 
-let deferredPrompt = null;
+/* ---------------- Perfil ("Tú") ---------------- */
+
+function renderProfile() {
+    const me = aliasFor(currentUid());
+    $("#me-avatar").textContent = me.emoji;
+    $("#me-title").textContent = `@${me.handle}`;
+}
+
+/* ---------------- Subida desde el botón ＋ ---------------- */
+
+function initPicker() {
+    // El ＋, "Tu foto" y los botones "Subir" son <label for="upload-input">: abren el selector
+    // de fotos directamente. Al elegir, se muestra la pantalla de publicación.
+    $("#upload-input").addEventListener("change", () => {
+        if ($("#upload-input").files?.length) {
+            if (isViewerOpen()) closeViewer();
+            location.hash = "#subir";
+        }
+    });
+}
+
+/* ---------------- PWA ---------------- */
 
 function initPwa() {
     if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => navigator.serviceWorker.register("service-worker.js").catch(console.warn));
     }
-    const installBtn = $("#install-btn");
-    const installHelp = $("#install-help");
-
-    if (isStandalone()) {
-        installHelp.textContent = "La app ya está instalada en este dispositivo. ✨";
-    } else if (isIOS()) {
-        installHelp.innerHTML = "En iPhone/iPad abre esta página en <strong>Safari</strong>, pulsa <strong>Compartir</strong> (el cuadrado con la flecha) y elige <strong>«Añadir a pantalla de inicio»</strong>.";
-    } else {
-        installHelp.innerHTML = "En Android abre el menú <strong>⋮</strong> de Chrome y elige <strong>«Instalar aplicación»</strong> o <strong>«Añadir a pantalla de inicio»</strong>.";
-    }
-
-    window.addEventListener("beforeinstallprompt", e => {
-        e.preventDefault();
-        deferredPrompt = e;
-        installBtn.hidden = false;
-    });
-    installBtn.addEventListener("click", async () => {
-        if (!deferredPrompt) return;
-        deferredPrompt.prompt();
-        await deferredPrompt.userChoice;
-        deferredPrompt = null;
-        installBtn.hidden = true;
-    });
-    window.addEventListener("appinstalled", () => { installBtn.hidden = true; });
 }
 
 /* ---------------- Inicio ---------------- */
@@ -210,8 +251,9 @@ function init() {
     applyTheme();
     fillStaticTexts();
     initGate();
-    initCountdown();
     renderWeddingInfo();
+    initCountdown();
+    initPicker();
     initPwa();
     window.addEventListener("hashchange", route);
 

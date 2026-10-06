@@ -5,7 +5,7 @@
  *
  * IMPORTANTE: cambia CACHE_VERSION cada vez que despliegues cambios.
  */
-const CACHE_VERSION = "v1.2.0";
+const CACHE_VERSION = "v2.0.2";
 const SHELL_CACHE = `boda-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `boda-runtime-${CACHE_VERSION}`;
 
@@ -13,15 +13,18 @@ const SHELL = [
     "./",
     "./index.html",
     "./manifest.json",
-    "./css/styles.css",
+    "./css/app.css",
     "./js/app.js",
     "./js/auth.js",
     "./js/firebase-config.js",
     "./js/gallery.js",
+    "./js/identity.js",
     "./js/likes.js",
     "./js/photos.js",
+    "./js/stories.js",
     "./js/upload.js",
     "./js/utils.js",
+    "./js/viewer.js",
     "./js/wedding-config.js",
     "./assets/icons/icon-192.png",
     "./assets/icons/icon-512.png",

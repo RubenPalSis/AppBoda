@@ -54,19 +54,22 @@ Aplicación web instalable (PWA) para que los invitados de la boda de **Iván y 
 
 ### Funcionalidades
 
+La app de invitados tiene estilo **red social** (Instagram / estados de WhatsApp):
+
 | Invitados (`/`) | Administrador (`/admin.html`) |
 |---|---|
 | Acceso con código de la boda (se recuerda en el dispositivo) | Login con email y contraseña (Firebase Auth) |
-| Portada con cuenta atrás | Nº total de fotos, likes, fotos de las últimas 24 h y espacio usado |
-| Subida de 1 o varias fotos (hasta 20 por vez) | Ver todas las fotos (filtrar recientes, ordenar por fecha o likes) |
-| Compresión automática en el móvil (máx. 1600 px y 450 KB por foto) | Descargar una foto |
-| Galería en tiempo real (masonry, carga progresiva, lazy loading) | Seleccionar varias y descargarlas en ZIP |
-| Visor a pantalla completa con deslizar ← → | 📦 DESCARGAR TODAS → `fotos-boda-ivan-angela.zip` |
-| ❤️ Me gusta (uno por dispositivo, se puede quitar) | Eliminar cualquier foto (o varias a la vez) |
-| ⬇️ Descargar foto | |
-| 🗑️ Eliminar mis propias fotos | |
-| Información de la boda (lugares, horarios, 📍 Cómo llegar) | |
-| Instalable como app (Android e iPhone) | |
+| **Historias** en círculos con anillo de color: 💍 *La boda* (cuenta atrás, lugar, programa, autobuses… en tarjetas a pantalla completa), 🆕 *Recientes*, **una historia por cada momento del programa** el día de la boda (Ceremonia, Cóctel, Comida, Fiestón…) y 🔥 *Las más queridas* | Nº total de fotos, likes, fotos de las últimas 24 h y espacio usado |
+| Visor de historias: barras de progreso, avance automático, tocar izquierda/derecha, mantener pulsado para pausar, deslizar hacia abajo para cerrar | Ver todas las fotos (filtrar recientes, ordenar por fecha o likes) |
+| **Feed** tipo Instagram en tiempo real, con scroll infinito | Descargar una foto |
+| **Doble toque = ❤️** con corazón animado (uno por dispositivo, se puede quitar con el botón) | Seleccionar varias y descargarlas en ZIP |
+| **Tablón** de fotos en estilo polaroid | 📦 DESCARGAR TODAS → `fotos-boda-ivan-angela.zip` |
+| Botón **＋** central: abre directamente la galería/cámara del móvil | Eliminar cualquier foto (o varias a la vez) |
+| Compresión automática en el móvil (máx. 1600 px y 450 KB por foto) | |
+| **Alias anónimo y divertido** por dispositivo (p. ej. `@brindis_dorado`), sin pedir datos personales | |
+| ⬇️ Descargar foto · 🗑️ Eliminar mis propias fotos | |
+| Información de la boda (lugares, programa con el momento actual resaltado, 📍 Cómo llegar) | |
+| Modo oscuro automático · Instalable como app (Android e iPhone) | |
 
 ### La decisión de seguridad más importante: invitados con **Firebase Auth anónimo**
 
@@ -87,10 +90,10 @@ Para que la app sea **gratuita (plan Spark)**, no se usa Cloud Storage: todo se 
 
 | Documento | Contenido | Tamaño típico | Uso |
 |---|---|---|---|
-| `photos/{photoId}` | Datos + **miniatura** (360 px) | 20–35 KB | Cuadrícula de la galería (lo único que se lee al navegar) |
+| `photos/{photoId}` | Datos + **miniatura** (640 px) | 40–75 KB | Feed, tablón y portadas de historias (lo único que se lee al navegar) |
 | `photoFiles/{photoId}` | **Foto comprimida** (1600 px) | 200–450 KB (máx. 450 KB) | Visor, descargas, ZIP (solo se lee al abrirla) |
 
-Si una foto pesa más de 450 KB, la app baja la calidad y, si hace falta, la resolución hasta que quepa. Así caben **~3.000 fotos** en el 1 GiB gratuito. Al redibujar la foto en el dispositivo, **se eliminan los metadatos EXIF (incluida la ubicación GPS)** y se corrige la orientación.
+Si una foto pesa más de 450 KB, la app baja la calidad y, si hace falta, la resolución hasta que quepa. Así caben **~2.500–3.000 fotos** en el 1 GiB gratuito. Al redibujar la foto en el dispositivo, **se eliminan los metadatos EXIF (incluida la ubicación GPS)** y se corrige la orientación.
 
 ```javascript
 // photos/{photoId}
@@ -139,16 +142,20 @@ AppBoda/
     ├── manifest.json        ← Manifiesto PWA
     ├── service-worker.js    ← Caché offline de la interfaz
     ├── css/
-    │   ├── styles.css       ← Estilos de la app (y base del admin)
+    │   ├── app.css          ← Estilos de la app de invitados (historias, feed, tablón, visor)
+    │   ├── styles.css       ← Estilos base del panel de administración
     │   └── admin.css        ← Estilos del panel
     ├── js/
     │   ├── wedding-config.js  ← ⭐ DATOS DE LA BODA (editar aquí)
     │   ├── firebase-config.js ← ⭐ CREDENCIALES DE FIREBASE (editar aquí)
     │   ├── auth.js          ← Código de acceso + sesión anónima
-    │   ├── app.js           ← Arranque, navegación, cuenta atrás, info, PWA
+    │   ├── app.js           ← Arranque, navegación, cuenta atrás, info, perfil, PWA
     │   ├── photos.js        ← Capa de datos: subir/leer/borrar fotos
     │   ├── upload.js        ← Selección, compresión y subida
-    │   ├── gallery.js       ← Galería y visor
+    │   ├── gallery.js       ← Feed y tablón (tiempo real + scroll infinito)
+    │   ├── stories.js       ← Historias (La boda, Recientes, momentos, Más queridas)
+    │   ├── viewer.js        ← Visor a pantalla completa (historias y fotos)
+    │   ├── identity.js      ← Alias anónimo de cada dispositivo
     │   ├── likes.js         ← Me gusta
     │   ├── admin.js         ← Panel de administración + ZIP
     │   └── utils.js         ← Utilidades compartidas (toasts, diálogos, descargas…)
@@ -166,10 +173,10 @@ La app está preparada para funcionar **gratis, siempre, en el plan Spark de Fir
 | Ya está hecho en el código | Lo tienes que hacer tú (consola de Firebase + terminal) |
 |---|---|
 | `.firebaserc` apunta a `appboda-ivan-angela` | Comprobar el ID del proyecto y que sigue en plan **Spark** ([Paso 1](#paso-1--abrir-el-proyecto-comprobar-su-id-y-el-plan-spark)) |
-| `firebase-config.js` tiene `projectId` y `authDomain` | Copiar `apiKey`, `messagingSenderId` y `appId` desde la consola ([Paso 8](#paso-8--rellenar-firebase-configjs)) |
+| `firebase-config.js` **completo** con los valores de la app web `AppBoda Web` | Nada (ya hecho: [Paso 8](#paso-8--rellenar-firebase-configjs)) |
 | Las fotos se guardan en **Firestore** (sin Cloud Storage, que exige plan de pago) | Activar Authentication y Firestore ([Pasos 3–6](#paso-3--authentication-para-invitados-anónimo)) |
 | `firebase.json` listo (Hosting en `public/`, reglas, índices, cabeceras) | Crear el administrador y su documento en `admins` ([Pasos 5 y 7](#paso-5--crear-el-usuario-administrador)) |
-| Reglas **probadas en el emulador (41 pruebas)** y app probada de principio a fin en un navegador (25 pruebas) | Desplegar y probar ([Pasos 10–14](#paso-10--instalar-y-conectar-firebase-cli)) |
+| Reglas **probadas en el emulador (41 pruebas)** y app probada en un móvil simulado (37 pruebas de interfaz + 5 del panel de admin) | Desplegar y probar ([Pasos 10–14](#paso-10--instalar-y-conectar-firebase-cli)) |
 
 > Mientras queden valores `TU_...` en `public/js/firebase-config.js`, la app muestra el aviso *"Falta configurar Firebase"* y no intenta conectarse. Es intencionado: así no se puede desplegar a medias sin darte cuenta.
 
@@ -385,7 +392,7 @@ Guárdalo: lo necesitas en el Paso 7.
 
 Para un segundo administrador (por ejemplo, el otro novio) repite este paso con su email y el Paso 7 con su UID.
 
-> **Recomendación:** usa `/admin.html` desde un navegador o perfil distinto del que uses como invitado. La sesión de Firebase se comparte en el mismo navegador: si entras como admin, ese navegador deja de ser el "invitado anónimo" que subió sus fotos (podrás seguir borrándolas como admin, pero no aparecerán como "Tuya").
+> **Recomendación:** usa `/admin.html` desde un navegador o perfil distinto del que uses como invitado. La sesión de Firebase se comparte en el mismo navegador: si entras como admin, ese navegador deja de ser el "invitado anónimo" que subió sus fotos (podrás seguir borrándolas como admin, pero no aparecerán como "Tu foto").
 
 ---
 
@@ -437,7 +444,7 @@ PULSA: "Crear" (Create).
 
 | Colección | Qué guarda | ¿Quién la crea? |
 |---|---|---|
-| `photos/{photoId}` | Autor, fecha, likes, tamaño y **miniatura** (~20–35 KB) | La app, con la primera foto (`photos.js`) |
+| `photos/{photoId}` | Autor, fecha, likes, tamaño y **miniatura** (~40–75 KB) | La app, con la primera foto (`photos.js`) |
 | `photoFiles/{photoId}` | La **foto comprimida** (máx. 450 KB) | La app, en el mismo lote que la anterior |
 | `photos/{photoId}/likes/{uid}` | Un documento por cada ❤️ | La app, con el primer like (`likes.js`) |
 | `admins/{uid}` | Quién es administrador | **Tú, a mano** ([Paso 7](#paso-7--dar-permisos-de-administrador-colección-admins)) |
@@ -483,15 +490,17 @@ Si te equivocas de UID, al entrar en `/admin.html` verás *"Este usuario no es a
 
 ### Paso 8 — Rellenar firebase-config.js
 
-Abre **`public/js/firebase-config.js`**. Ahora mismo contiene esto (ya rellené `authDomain` y `projectId` porque se deducen del ID del proyecto):
+✅ **Ya está hecho** con los valores de la app web *AppBoda Web* (`apiKey`, `messagingSenderId`, `appId`). Esta sección queda como referencia por si alguna vez registras otra app web.
+
+Abre **`public/js/firebase-config.js`**. Los valores de ejemplo tenían este aspecto:
 
 ```javascript
 const firebaseConfig = {
-    apiKey: "TU_API_KEY",                              // cópialo de la consola
+    apiKey: "TU_API_KEY",
     authDomain: "appboda-ivan-angela.firebaseapp.com",
     projectId: "appboda-ivan-angela",
-    messagingSenderId: "TU_MESSAGING_SENDER_ID",       // cópialo de la consola
-    appId: "TU_APP_ID"                                 // cópialo de la consola
+    messagingSenderId: "TU_MESSAGING_SENDER_ID",
+    appId: "TU_APP_ID"
 };
 ```
 
@@ -801,7 +810,7 @@ Hosting URL: https://appboda-ivan-angela.web.app
 
 La **Hosting URL** que muestre la terminal es la URL real de la app. También funciona `https://appboda-ivan-angela.firebaseapp.com` (el mismo sitio).
 
-> **Importante para despliegues futuros:** cada vez que cambies cualquier archivo de `public/`, sube `CACHE_VERSION` en `public/service-worker.js` (por ejemplo `v1.2.0` → `v1.2.1`) antes de `firebase deploy`. Si no, los móviles que ya tienen la app pueden seguir viendo la versión anterior hasta la siguiente visita. En esta revisión ya la he subido a `v1.2.0`.
+> **Importante para despliegues futuros:** cada vez que cambies cualquier archivo de `public/`, sube `CACHE_VERSION` en `public/service-worker.js` (por ejemplo `v2.0.2` → `v2.0.3`) antes de `firebase deploy`. Si no, los móviles que ya tienen la app pueden seguir viendo la versión anterior hasta la siguiente visita. En esta revisión ya la he subido a `v2.0.2`.
 
 ---
 
@@ -814,17 +823,18 @@ Hazlo con **dos navegadores distintos**. Por ejemplo: **A** = tu Chrome normal y
 | 1 | **La portada funciona** | Abre `https://appboda-ivan-angela.web.app` | Pantalla con "Iván & Ángela" y campo de código. Sin errores en F12 → *Console*. |
 | 2 | **El código de acceso funciona** | Escribe un código erróneo y luego `IvAngela2026` | Erróneo: *"El código introducido no es correcto."* Correcto: entra en la app con la cuenta atrás. |
 | 3 | **Se crea el usuario anónimo** | Consola → **Authentication → Usuarios** | Aparece una fila nueva con proveedor **Anónimo** e identificador *(anónimo)*. Cada navegador o dispositivo crea uno. |
-| 4 | **Se puede subir una foto** | Navegador A → ➕ Subir → elige 1–2 fotos → **Subir** | Se ve *"6,2 MB → 310 KB"* (o similar), luego *"Subiendo 1 de 2…"* y *"¡Fotos subidas correctamente! ❤️"*. Pasa a la galería. |
+| 4 | **Se puede subir una foto** | Navegador A → botón **＋** central → elige 1–2 fotos → **Publicar** | Se ve *"6,2 MB → 310 KB"* (o similar) y *"Subiendo 1 de 2…"*. Vuelve a Inicio con *"¡2 fotos publicadas! 🎉"*, las fotos en el feed y la historia *Recientes*. |
 | 5 | **La foto está guardada** (en Firestore, no en Storage) | Consola → **Firestore → Datos** → `photoFiles` | Un documento `photo_…` con `ownerId` y `data` (*Bytes*, como máximo 450 KB). |
 | 6 | **La información aparece en Firestore** | **Firestore → Datos** → `photos` | Un documento con el **mismo ID**, con `ownerId` (el UID anónimo de A), `likes: 0`, `createdAt`, `width`, `height`, `size` y `thumb` (*Bytes*). |
-| 7 | **Se puede dar like** | Navegador B → abre la foto de A → **🤍 Me gusta** | Pasa a *❤️ Te gusta* y el contador sube a 1. En Firestore aparece `photos/{id}/likes/{UID de B}` y `likes: 1`. Si lo pulsas otra vez se quita (`likes: 0`). |
-| 8 | **Se puede borrar una foto propia** | Navegador A → abre su foto → **🗑️ Eliminar** → confirmar | *"Foto eliminada"*. Desaparece de la galería y de **las dos** colecciones (`photos` y `photoFiles`). |
-| 9 | **Un usuario no puede borrar fotos de otro** | Navegador B → abre una foto de A | **No aparece** el botón 🗑️. El intento forzado desde la consola del navegador se explica en [🔐 Pruebas de seguridad](#-pruebas-de-seguridad-antes-de-la-boda). |
+| 7 | **Se puede dar like** | Navegador B → **doble toque** sobre la foto de A en el feed (o el botón ♡) | Aparece el corazón animado, el ♡ se pone rojo y pone *"1 me gusta"*. En Firestore aparece `photos/{id}/likes/{UID de B}` y `likes: 1`. Si pulsas el ♡ otra vez se quita (`likes: 0`). |
+| 8 | **Se puede borrar una foto propia** | Navegador A → icono 🗑️ de su foto en el feed (o en el visor) → confirmar | *"Foto eliminada"*. Desaparece del feed, del tablón y de **las dos** colecciones (`photos` y `photoFiles`). |
+| 9 | **Un usuario no puede borrar fotos de otro** | Navegador B → mira una foto de A en el feed o el visor | **No aparece** el icono 🗑️. El intento forzado desde la consola del navegador se explica en [🔐 Pruebas de seguridad](#-pruebas-de-seguridad-antes-de-la-boda). |
 | 10 | **El administrador puede iniciar sesión** | Abre `https://appboda-ivan-angela.web.app/admin.html` (en un tercer navegador/perfil) → email y contraseña del Paso 5 | Panel con estadísticas: nº de fotos, likes, últimas 24 h y espacio. |
 | 11 | **El administrador puede borrar fotos** | En el panel → 🗑️ Eliminar sobre una foto de A | *"Fotos eliminadas"*. Desaparece de `photos` y `photoFiles`. |
 | 12 | **El ZIP funciona** | En el panel → **📦 DESCARGAR TODAS** | Se descarga `fotos-boda-ivan-angela.zip` con `foto-001.jpg…`. |
-| 13 | **⬇️ Descargar en el visor** | Navegador A → abre una foto → ⬇️ | Descarga un `.jpg` o abre el menú *Compartir* en el móvil. |
-| 14 | **`/admin.html` funciona al acceder directamente** | Escribe la URL completa en una pestaña nueva | Carga el login (no la app de invitados). Nota: `/admin` sin `.html` da 404, y es lo esperado. |
+| 13 | **⬇️ Descargar** | Navegador A → icono ⬇️ de una foto (feed o visor) | Descarga un `.jpg` o abre el menú *Compartir* en el móvil. |
+| 14 | **Historias** | Toca *La boda* y *Recientes* | Tarjetas con barras de progreso que avanzan solas; tocar a la derecha pasa, mantener pulsado pausa. |
+| 15 | **`/admin.html` funciona al acceder directamente** | Escribe la URL completa en una pestaña nueva | Carga el login (no la app de invitados). Nota: `/admin` sin `.html` da 404, y es lo esperado. |
 
 Después, prueba en móviles reales: [Comprobación desde móvil](#comprobación-desde-móvil).
 
@@ -847,8 +857,8 @@ El botón 🗑️ solo aparece en tus propias fotos, pero **ocultar un botón no
 
 | Acción | Cómo | Resultado esperado |
 |---|---|---|
-| Subir foto | ➕ Subir → elegir foto → Subir | ✅ Se sube y aparece con la etiqueta **"Tuya"** |
-| Dar like | Abrir su foto → 🤍 Me gusta | ✅ Contador +1. Pulsar de nuevo → −1 |
+| Subir foto | ＋ → elegir foto → Publicar | ✅ Se publica con la etiqueta **"Tu foto"** |
+| Dar like | Doble toque en su foto | ✅ Contador +1. Botón ♡ de nuevo → −1 |
 | Borrar su foto | Abrir su foto → 🗑️ Eliminar | ✅ Desaparece (haz esto **al final**, después de las pruebas de B) |
 
 Antes de borrar, A da like a su foto y apunta dos datos. En la consola de A:
@@ -948,13 +958,13 @@ En Spark **no hay tarjeta asociada**, así que es imposible que Google cobre nad
 
 Estos números **son estimaciones**: dependen de cuántas fotos se suban y de cuánto miren la galería los invitados. Supuestos:
 
-- Foto guardada ≈ **300 KB** (máx. 450 KB; las fotos de móvil reales suelen quedar en 200–400 KB) + miniatura ≈ **25 KB**.
+- Foto guardada ≈ **300 KB** (máx. 450 KB; las fotos de móvil reales suelen quedar en 200–400 KB) + miniatura ≈ **60 KB** (640 px, para que el feed se vea nítido).
 - Cada uno de los 50 usuarios sube ~20 fotos → **~1.000 fotos**. También se calcula un escenario alto de 2.000.
 - Cada usuario, el día de la boda, ve ~300 miniaturas, abre ~40 fotos y da ~30 likes.
 
 | Recurso | 1.000 fotos | 2.000 fotos | Límite gratuito | ¿Cabe? |
 |---|---|---|---|---|
-| Almacenamiento Firestore | ≈ 0,33 GB | ≈ 0,65 GB | 1 GiB | ✅ (caben **~3.000 fotos**) |
+| Almacenamiento Firestore | ≈ 0,36 GB | ≈ 0,72 GB | 1 GiB | ✅ (caben **~2.500–3.000 fotos**) |
 | Escrituras el día de la boda (fotos + likes) | ≈ 2.000 + 3.000 = 5.000 | ≈ 4.000 + 3.000 = 7.000 | 20.000/día | ✅ |
 | Lecturas el día de la boda | ≈ 20.000 – 30.000 | ≈ 25.000 – 40.000 | 50.000/día | ✅ con margen razonable |
 | Transferencia en el mes de la boda | ≈ 1,5 GB (+0,3 GB por cada ZIP completo) | ≈ 2 GB (+0,6 GB por ZIP) | 10 GiB/mes | ✅ |
@@ -964,7 +974,8 @@ Estos números **son estimaciones**: dependen de cuántas fotos se suban y de cu
 
 - Abrir la galería = 24 lecturas (un bloque). Al hacer scroll, +24 por bloque, **sin volver a leer** las que ya estaban cargadas.
 - Volver a abrir la app: la caché del dispositivo hace que solo se cobren los cambios si han pasado menos de 30 minutos.
-- Abrir una foto = 2 lecturas (la foto + comprobar si ya le diste like).
+- Abrir una foto o verla en una historia = 1 lectura (la foto completa). Los likes que has dado los recuerda el propio móvil, sin gastar lecturas.
+- Historias: 1 lectura por portada de cada momento (como mucho cada 3 minutos) y 1 por foto al abrirla.
 - Cada foto nueva que llega en tiempo real = 1 lectura por cada invitado que tenga la galería abierta en ese momento.
 - Las reglas de seguridad también hacen alguna lectura interna al subir o dar like.
 
@@ -981,7 +992,7 @@ Estos números **son estimaciones**: dependen de cuántas fotos se suban y de cu
 
 ### Consejos para no acercarse a los límites
 
-1. **No subas** `upload.maxBytes` ni `maxSide` en `wedding-config.js`: es lo que hace que quepan ~3.000 fotos.
+1. **No subas** `upload.maxBytes`, `maxSide` ni `thumbMaxSide` en `wedding-config.js`: es lo que hace que quepan ~2.500–3.000 fotos.
 2. **Haz el ZIP completo el día después de la boda (después de las 09:00) y no el mismo día**: cada ZIP lee todas las fotos (1 lectura y ~300 KB de transferencia por foto).
 3. Vigila el consumo la víspera y el día después en **Firestore Database → pestaña "Uso"** (*Usage*): lecturas, escrituras y almacenamiento.
 4. Si un día se agotaran las lecturas, las fotos **no se pierden**: siguen guardadas y vuelven a verse al renovarse la cuota.
@@ -1019,7 +1030,7 @@ Lo que **solo está en la consola** y conviene apuntar (por ejemplo, en una nota
 ```text
 Proyecto:               appboda-ivan-angela
 Plan:                   Spark (sin tarjeta)
-Firestore:              (default), europe-southwest1, edición Standard
+Firestore:              (default), eur3 (Europa, multirregión), edición Standard
 Authentication:         Anónimo ✔, Correo/contraseña ✔
 Administradores (UID):  ...  (email ...)
 Hosting:                https://appboda-ivan-angela.web.app
@@ -1155,7 +1166,7 @@ Herramienta gratuita para redimensionar y comprimir sin instalar nada: <https://
 
 **Notas:**
 
-- La imagen se ve **muy suavizada** a propósito, para que el texto se lea bien. Si quieres que se vea más, en `public/css/styles.css` (regla `.hero--image`) baja los valores `.82` y `.92` de `rgba(250, 247, 242, …)`, por ejemplo a `.6` y `.75`.
+- La imagen se usa de **fondo de la pantalla del código**, con un velo oscuro para que el texto blanco se lea bien. Para cambiar la intensidad, en `public/css/app.css` (regla `.gate.has-image .gate__glow`) ajusta los valores `.25` y `.55` de `rgba(0, 0, 0, …)`.
 - La portada es visible **antes** de introducir el código: no pongas nada que no quieras que vea quien tenga la URL.
 - Si más adelante cambias la imagen, usa **otro nombre de archivo** (`portada-2.jpg`): `firebase.json` hace que los móviles guarden `assets/` en caché durante 7 días.
 
@@ -1190,7 +1201,7 @@ accessCode: "IvAngela2026",
 
 - Se compara **sin distinguir mayúsculas/minúsculas** y quitando espacios (más cómodo para invitados con el móvil: `ivangela2026` también vale).
 - Una vez introducido, el dispositivo queda autorizado (`localStorage`). El código **no vuelve a mostrarse** en la interfaz.
-- En **ℹ️ Más → Cerrar sesión** se vuelve a pedir el código (las fotos del invitado no se borran y sigue pudiendo eliminarlas si vuelve a entrar desde el mismo navegador).
+- En **Tú → Cerrar sesión** se vuelve a pedir el código (las fotos del invitado no se borran y sigue pudiendo eliminarlas si vuelve a entrar desde el mismo navegador).
 
 > ⚠️ **Es una barrera de la interfaz, no una medida de seguridad.** El código está en el JavaScript descargado y cualquiera con conocimientos puede leerlo. Lo que protege las fotos son las **reglas de Firestore** ([Reglas de seguridad](#reglas-de-seguridad-qué-permite-cada-una)).
 
@@ -1215,7 +1226,7 @@ Todo está centralizado en **`public/js/wedding-config.js`**:
 | Colores | `theme: { cream, ink, gold, beige }` |
 | Imagen de portada | `heroImage: "assets/images/portada.jpg"` |
 | Límites de subida | `upload: { maxFilesPerUpload: 20, maxOriginalSizeMB: 40, maxSide: 1600, quality: 0.75, maxBytes: 450 KB, ... }` (no los subas: ver [💰](#-costes-y-límites)) |
-| Fotos por bloque en la galería | `gallery.pageSize` |
+| Fotos por bloque en el feed y el tablón | `gallery.pageSize` |
 | Nombre y partes del ZIP | `admin: { zipBaseName, zipMaxPhotosPerFile }` |
 
 Los campos vacíos se muestran como **"Por confirmar"** y el botón **📍 Cómo llegar** aparece desactivado.
@@ -1229,7 +1240,8 @@ Los campos vacíos se muestran como **"Por confirmar"** y el botón **📍 Cómo
 - **Nombre de la app instalada y colores de la barra del sistema:** `public/manifest.json` (`name`, `short_name`, `theme_color`, `background_color`) y las etiquetas `<meta name="theme-color">` / `<title>` de `index.html` y `admin.html`.
 - **Iconos:** reemplaza los PNG de `public/assets/icons/` manteniendo nombres y tamaños exactos: `icon-192.png` (192×192), `icon-512.png` (512×512), `icon-maskable-512.png` (512×512 con el motivo dentro del 80 % central), `apple-touch-icon.png` (180×180, sin transparencia), `favicon-32.png` (32×32) e `icon.svg`.
 - **Imagen de portada:** ver [🖼️ Imagen de portada](#️-imagen-de-portada-heroimage).
-- **Tipografías:** `--font-display` y `--font-body` al principio de `public/css/styles.css` + el `<link>` de Google Fonts en los HTML.
+- **Tipografías y colores de la app:** variables `--font-logo`, `--font-body`, `--grad` (degradado de historias y botones) al principio de `public/css/app.css` + el `<link>` de Google Fonts en `index.html`. El panel de admin usa `styles.css`.
+- **Momentos de las historias:** salen de `schedule` (una historia por cada hora del programa, con las fotos subidas entre esa hora y la siguiente). El emoji se elige por el título (ceremonia 💍, cóctel 🥂, comida 🍽️, fiesta 💃…).
 
 > Tras cambiar cualquier archivo, incrementa `CACHE_VERSION` en `public/service-worker.js` (p. ej. `v1.1.0` → `v1.1.1`) antes de desplegar, para que los móviles que ya tengan la app instalada reciban la versión nueva.
 
@@ -1274,11 +1286,12 @@ Las fotos que subas en local van a tu Firebase real; bórralas después desde el
 ### Qué comprobar
 
 - [ ] **Acceso:** un código incorrecto muestra *"El código introducido no es correcto."*; el correcto entra. Al recargar ya no lo pide.
-- [ ] **Subida:** ➕ Subir → *Elegir fotos* → selecciona varias. Se ven miniaturas y *"6,2 MB → 780 KB"*.
+- [ ] **Subida:** botón **＋** → selecciona varias. Se ven miniaturas y *"6,2 MB → 310 KB"* → **Publicar**.
 - [ ] **Compresión:** en Firestore (consola) el campo `size` de cada foto es ≤ 460.800 (450 KB).
 - [ ] **Progreso:** *"Subiendo 3 de 8..."* y al final *"¡Fotos subidas correctamente! ❤️"*.
-- [ ] **Galería:** las fotos aparecen al instante, también en otra pestaña/dispositivo sin recargar.
-- [ ] **Likes:** ❤️ Me gusta suma 1; volver a pulsar lo quita; nunca suma 2 desde el mismo navegador.
+- [ ] **Feed y tablón:** las fotos aparecen al instante, también en otra pestaña/dispositivo sin recargar.
+- [ ] **Likes:** doble toque suma 1 (con corazón animado); el botón ♡ lo quita; nunca suma 2 desde el mismo navegador.
+- [ ] **Historias:** *La boda* muestra las tarjetas; *Recientes* avanza sola cada 5 s.
 - [ ] **Descarga:** ⬇️ Descargar guarda un `.jpg`.
 - [ ] **Eliminar propias:** en tus fotos aparece 🗑️ Eliminar con confirmación; en las de otros (abre otra ventana de incógnito) no aparece.
 - [ ] **Admin:** `/admin.html` → login → estadísticas correctas → eliminar una foto de otro invitado.
@@ -1296,10 +1309,10 @@ Hazlo con la app **desplegada** (o un canal de vista previa): la cámara, la ins
 ### Android (Chrome)
 
 - [ ] Escanea el QR con la cámara → se abre Chrome → introduce el código.
-- [ ] ➕ Subir → *Elegir fotos* → permite elegir de la galería o hacer una foto con la cámara.
+- [ ] Botón **＋** → permite elegir de la galería o hacer una foto con la cámara.
 - [ ] Selecciona **varias** fotos → se comprimen (ves *"X MB → Y KB"*) → **Subir** → *"Subiendo 1 de N..."*.
-- [ ] 📸 Galería: 2 columnas, las fotos aparecen al momento.
-- [ ] Visor: deslizar ← → cambia de foto, deslizar hacia abajo o el botón **atrás** del sistema lo cierra.
+- [ ] Feed, historias y tablón: las fotos aparecen al momento.
+- [ ] Visor: deslizar ← → cambia de foto, doble toque da ❤️, deslizar hacia abajo o el botón **atrás** del sistema lo cierra.
 - [ ] ⬇️ Descargar: abre el menú *Compartir* (elige *Guardar* / Fotos / Drive) o descarga el archivo.
 - [ ] Instala la app (ver [PWA](#pwa)) y ábrela desde el icono.
 - [ ] La barra inferior no queda tapada por la barra de gestos.
@@ -1326,11 +1339,11 @@ En Chrome de escritorio: abre la URL → **F12** → pestaña **Application**:
 
 ### Android
 
-Chrome → menú **⋮** → **"Instalar aplicación"** o **"Añadir a pantalla de inicio"**. (Chrome a veces muestra también un aviso automático, o el botón **Instalar ahora** en la sección **ℹ️ Más** de la app).
+Chrome → menú **⋮** → **"Instalar aplicación"** o **"Añadir a pantalla de inicio"**. (Chrome a veces muestra también un aviso automático).
 
 ### iPhone / iPad
 
-Safari → botón **Compartir** (cuadrado con flecha hacia arriba) → **"Añadir a pantalla de inicio"** → **Añadir**. (La sección **ℹ️ Más** de la app muestra estas instrucciones).
+Safari → botón **Compartir** (cuadrado con flecha hacia arriba) → **"Añadir a pantalla de inicio"** → **Añadir**.
 
 ### Limitaciones de iOS
 
@@ -1368,24 +1381,24 @@ Todos se ejecutan desde la carpeta raíz del proyecto, con `firebase use` apunta
 Antes de escribir esta guía revisé todo el proyecto (`firebase.json`, `.firebaserc`, reglas, todos los módulos JS, el service worker y el manifest) y lo probé en los **emuladores de Firebase**:
 
 - **41 pruebas de reglas** (Firestore + Auth): subida legítima, límites de tamaño, lotes incompletos, suplantación de dueño, inyección de texto, likes, borrados, un segundo usuario, un usuario con email que no es admin y el admin.
-- **25 pruebas de extremo a extremo en un navegador real** (Chromium) con la app tal cual:
-  - Acceso con código y subida de 26 fotos.
-  - Un original de **12 MB** guardado en **394 KB**.
-  - Paginación con scroll y foto nueva recibida en tiempo real por otro usuario.
-  - Visor con foto completa, likes y descarga.
-  - Borrado propio, panel de admin (estadísticas, borrado) y ZIP con 25 JPEG válidos.
+- **Pruebas de extremo a extremo en Chromium** con un móvil simulado (390×844, táctil, hora de Madrid) y la app tal cual:
+  - Datos (25): acceso, subida de 26 fotos, un original de **12 MB** guardado en **394 KB**, paginación, tiempo real, visor, likes, borrado, panel de admin y ZIP.
+  - Interfaz nueva (37): historias (*La boda*, *Recientes*, momentos y *Más queridas*), avance automático y toques, doble toque = ❤️ (y que no lo quite), like optimista, feed, tablón, alias, perfil, borrado, modo oscuro y sin errores de JavaScript.
+  - **Simulación del día de la boda** (reloj del navegador a las 20:30 del 7/11/2026): aparecen *Ceremonia civil* y *Cóctel* con sus fotos, la historia salta a la siguiente al terminar, se ve el banner *"¡Hoy es nuestro gran día!"* y el programa marca *Fiestón* como momento actual.
+  - Panel de admin (5): estadísticas, ZIP y borrado.
 
 ### Cambios realizados
 
 | # | Cambio | Motivo |
 |---|---|---|
 | 1 | **Plan Spark: las fotos se guardan en Firestore** (`photos` con miniatura + `photoFiles` con la foto) en lugar de Cloud Storage. Afecta a `photos.js`, `gallery.js`, `admin.js`, `upload.js`, `firebase-config.js`, `firestore.rules`, `firestore.indexes.json` y `firebase.json` (sin sección `storage`). | Cloud Storage exige el plan de pago Blaze. Con Spark el coste es 0 € garantizado. |
-| 2 | **Compresión con tope de tamaño** (`upload.maxBytes` = 450 KB, 1600 px; miniatura de 360 px y máx. 60 KB): baja calidad y, si hace falta, resolución hasta cumplirlo. | Un documento de Firestore admite como máximo 1 MiB y la cuota gratuita es de 1 GiB (~3.000 fotos). |
+| 2 | **Compresión con tope de tamaño** (`upload.maxBytes` = 450 KB, 1600 px; miniatura de 640 px y máx. 75 KB): baja calidad y, si hace falta, resolución hasta cumplirlo. | Un documento de Firestore admite como máximo 1 MiB y la cuota gratuita es de 1 GiB (~2.500–3.000 fotos). |
 | 3 | **Paginación con cursor** (`startAfter`) y tiempo real solo en el bloque más reciente. | Antes cada "cargar más" volvía a leer todas las fotos ya cargadas: con la cuota de 50.000 lecturas/día de Spark era el mayor riesgo. |
 | 4 | **Caché persistente de Firestore** en el dispositivo (IndexedDB). | Al volver a abrir la app solo se cobran los cambios. |
 | 5 | **XSS persistente corregido.** La galería insertaba datos de Firestore en el HTML sin escapar. Ahora se escapan, y las reglas solo admiten bytes en las imágenes y enteros en las dimensiones. | Un invitado podía ejecutar JavaScript en el móvil de todos. |
 | 6 | **Nadie puede sustituir la foto de otro** (`photoFiles`: sin `update`, y al crear no puede existir ya la foto). | En la versión con Storage era posible sobrescribir el archivo de otro invitado (lo detectaron las pruebas). |
-| 7 | `.firebaserc` → `appboda-ivan-angela`. `firebase-config.js` con `projectId` y `authDomain`. `CACHE_VERSION` → `v1.2.0`. | Configuración del proyecto real. |
+| 7 | `.firebaserc` → `appboda-ivan-angela`. `firebase-config.js` completo. `CACHE_VERSION` → `v2.0.2`. | Configuración del proyecto real. |
+| 8 | **Nueva interfaz estilo red social**: historias, feed con doble toque, tablón de polaroids, visor tipo historias, alias anónimos, modo oscuro (`index.html`, `app.css`, `app.js`, `gallery.js`, `stories.js`, `viewer.js`, `identity.js`, `likes.js`). Los likes propios se recuerdan en el móvil. | Más moderna y fácil. Además ahorra lecturas: antes se consultaba el like de cada foto abierta. |
 
 > `storage.rules` y `cors.json` siguen en el repositorio pero **ya no se usan** (nada los referencia). Se pueden borrar.
 
@@ -1460,7 +1473,7 @@ Antes de escribir esta guía revisé todo el proyecto (`firebase.json`, `.fireba
 ### "En iPhone los botones aparecen desplazados"
 - Comprueba que la etiqueta viewport de `index.html` incluye **`viewport-fit=cover`**:
   `<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">`
-- `styles.css` usa `env(safe-area-inset-top)` en la cabecera y `env(safe-area-inset-bottom)` en la barra inferior (variables `--safe-top` / `--safe-bottom`). Si has modificado esas reglas, restáuralas.
+- `app.css` usa `env(safe-area-inset-top)` en la cabecera y `env(safe-area-inset-bottom)` en la barra inferior (variables `--safe-top` / `--safe-bottom`). Si has modificado esas reglas, restáuralas.
 - Tras cambiar el CSS, en la app instalada hay que incrementar `CACHE_VERSION`, desplegar, abrir la app, cerrarla del todo y volver a abrirla.
 - `apple-mobile-web-app-status-bar-style` está en `default` (barra de estado sobre fondo claro). Si lo cambias a `black-translucent`, el contenido pasa por debajo de la barra de estado y dependerá totalmente de `safe-area-inset-top`.
 
@@ -1517,9 +1530,9 @@ Flujo de una subida:
 
 ```text
 Elegir fotos → <img> decodifica (orientación EXIF) → <canvas> 1600 px → JPEG ≤ 450 KB
-            → miniatura 360 px ≤ 60 KB
+            → miniatura 640 px ≤ 75 KB
             → un lote atómico: photoFiles/{id} (foto) + photos/{id} (datos + miniatura, createdAt = hora servidor)
-            → onSnapshot del bloque más reciente → galería de todos
+            → onSnapshot del bloque más reciente → feed, tablón e historias de todos
 ```
 
 ---
@@ -1537,7 +1550,7 @@ Elegir fotos → <img> decodifica (orientación EXIF) → <canvas> 1600 px → J
 ☐ Authentication Email/Password activado
 ☐ Usuario administrador creado
 ☐ Documento admins/{UID} creado en Firestore
-☐ Firestore creado ((default), europe-southwest1, modo producción)
+☐ Firestore creado ((default), eur3 o europe-southwest1, modo producción)
 ☐ Storage NO activado (las fotos van en Firestore)
 ☐ firebase-config.js configurado (sin "TU_", USE_EMULATORS = false)
 ☐ .firebaserc configurado

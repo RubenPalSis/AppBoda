@@ -1,5 +1,5 @@
 /**
- * Galería de invitados (tiempo real, carga progresiva) y visor/lightbox.
+ * Feed (estilo Instagram) y Tablón (polaroids) de fotos.
  *
  * Para gastar pocas lecturas de Firestore (plan Spark: 50.000/día):
  *  - Solo se escucha en tiempo real el bloque de fotos más recientes.
@@ -8,46 +8,74 @@
  *  - La foto completa (photoFiles) solo se lee al abrirla en el visor.
  */
 import { weddingConfig } from "./wedding-config.js";
-import { $, escapeHtml, showToast, confirmDialog, downloadPhoto, photoFilename, friendlyError } from "./utils.js";
+import { $, $$, escapeHtml, showToast, confirmDialog, downloadPhoto, photoFilename, friendlyError, timeAgo } from "./utils.js";
 import { currentUid } from "./auth.js";
 import { subscribePhotos, fetchOlderPhotos, getFullImageUrl, deletePhoto, releasePhoto } from "./photos.js";
-import { hasLiked, toggleLike } from "./likes.js";
+import { isLiked, toggleLike } from "./likes.js";
+import { aliasFor, jitter } from "./identity.js";
+import { openViewer, appendToViewer } from "./viewer.js";
 
 const pageSize = weddingConfig.gallery.pageSize;
+const DOUBLE_TAP_MS = 280;
 
 let photos = [];          // todas las fotos cargadas, de más reciente a más antigua
 let older = new Map();    // id -> foto cargada fuera del bloque en tiempo real
 let live = [];            // bloque en tiempo real (las pageSize más recientes)
 let hasMore = false;
+let loaded = false;
 let unsubscribe = null;
-let loadingMore = false;
-const tiles = new Map(); // id -> elemento
+let loadingMore = null;
+let activeView = "inicio";
+const listeners = new Set();
+const posts = new Map();   // id -> <article> del feed
+const pins = new Map();    // id -> <button> del tablón
 const els = {};
 
 export function initGallery() {
-    els.grid = $("#gallery-grid");
-    els.empty = $("#gallery-empty");
-    els.count = $("#gallery-count");
-    els.sentinel = $("#gallery-sentinel");
-    els.more = $("#gallery-more");
-    els.empty.textContent = weddingConfig.texts.galleryEmpty;
+    els.feed = $("#feed");
+    els.board = $("#board");
+    els.feedEmpty = $("#feed-empty");
+    els.boardEmpty = $("#board-empty");
+    els.sentinel = $("#feed-sentinel");
+    els.loading = $("#feed-loading");
 
-    els.grid.addEventListener("click", e => {
-        const tile = e.target.closest("[data-id]");
-        if (tile) openLightbox(tile.dataset.id);
+    els.feed.addEventListener("click", onFeedClick);
+    els.board.addEventListener("click", e => {
+        const pin = e.target.closest("[data-id]");
+        if (pin) openAt(pin.dataset.id);
     });
-    els.more.addEventListener("click", loadMore);
 
-    // Scroll infinito: al acercarse al final se piden más fotos.
     if ("IntersectionObserver" in window) {
         new IntersectionObserver(entries => {
-            if (entries.some(e => e.isIntersecting)) loadMore();
-        }, { rootMargin: "600px" }).observe(els.sentinel);
+            if (entries.some(e => e.isIntersecting) && isPhotoView()) loadMore();
+        }, { rootMargin: "800px" }).observe(els.sentinel);
     }
 
-    initLightbox();
+    window.addEventListener("photo:liked", e => updateLikeUI(e.detail.id));
+    window.addEventListener("photo:deleted", e => dropPhoto(e.detail.id));
+    setInterval(refreshTimes, 60000);
+
     subscribe();
 }
+
+/** Vista activa ("inicio" = feed, "tablon" = tablón). Solo se pinta la visible. */
+export function setGalleryView(view) {
+    activeView = view;
+    render();
+}
+
+/** Fotos del bloque en tiempo real (las más recientes), para la historia "Recientes". */
+export function getRecentPhotos() {
+    return [...live];
+}
+
+export function onPhotosChange(fn) {
+    listeners.add(fn);
+}
+
+const isPhotoView = () => activeView === "inicio" || activeView === "tablon";
+
+/* ---------------- Datos ---------------- */
 
 const byNewest = (a, b) => (b.createdAt || Infinity) - (a.createdAt || Infinity);
 
@@ -59,6 +87,10 @@ function rebuild() {
 function forget(id) {
     older.delete(id);
     releasePhoto(id);
+    posts.get(id)?.remove();
+    posts.delete(id);
+    pins.get(id)?.remove();
+    pins.delete(id);
 }
 
 function subscribe() {
@@ -76,271 +108,264 @@ function subscribe() {
         }
         live = list;
         if (first) { hasMore = full; first = false; }
+        loaded = true;
         rebuild();
         render();
-        refreshLightbox();
+        listeners.forEach(fn => fn(photos));
     }, err => {
         console.error(err);
         showToast(friendlyError(err), "error", 6000);
     });
 }
 
-async function loadMore() {
-    if (!hasMore || loadingMore) return;
+function loadMore() {
+    if (!hasMore) return Promise.resolve([]);
+    if (loadingMore) return loadingMore;
     const last = [...photos].reverse().find(p => p.createdAtTs);
-    if (!last) return;
-    loadingMore = true;
-    try {
-        const list = await fetchOlderPhotos(last.createdAtTs, pageSize);
-        list.forEach(p => older.set(p.id, p));
-        hasMore = list.length >= pageSize;
-        rebuild();
-        render();
-        refreshLightbox();
-    } catch (err) {
-        console.error(err);
-        showToast(friendlyError(err), "error", 6000);
-    } finally {
-        loadingMore = false;
-    }
+    if (!last) return Promise.resolve([]);
+    els.loading.hidden = false;
+    loadingMore = fetchOlderPhotos(last.createdAtTs, pageSize)
+        .then(list => {
+            list.forEach(p => older.set(p.id, p));
+            hasMore = list.length >= pageSize;
+            rebuild();
+            render();
+            return list;
+        })
+        .catch(err => {
+            console.error(err);
+            showToast(friendlyError(err), "error", 6000);
+            return [];
+        })
+        .finally(() => {
+            loadingMore = null;
+            els.loading.hidden = true;
+        });
+    return loadingMore;
 }
 
-/** Quita una foto de la galería al momento (borrada por mí o ya inexistente). */
+/** Quita una foto al momento (borrada por mí o ya inexistente). */
 function dropPhoto(id) {
     live = live.filter(p => p.id !== id);
     forget(id);
     rebuild();
     render();
+    listeners.forEach(fn => fn(photos));
 }
 
-function tileHtml(photo, isOwn) {
+/* ---------------- Render ---------------- */
+
+const who = photo => {
+    const alias = aliasFor(photo.ownerId);
+    return { emoji: alias.emoji, name: photo.ownerId === currentUid() ? "Tú" : alias.handle };
+};
+
+const likesText = n => (n ? `${n} me gusta` : "Sé el primero en darle ❤️");
+
+function postHtml(photo) {
+    const own = photo.ownerId === currentUid();
+    const { emoji, name } = who(photo);
     return `
-        <img src="${escapeHtml(photo.thumbURL)}" alt="Foto de la boda" loading="lazy" decoding="async"
-             width="${Number(photo.width) || 3}" height="${Number(photo.height) || 4}">
-        ${isOwn ? `<span class="tile__own">Tuya</span>` : ""}
-        <span class="tile__likes" aria-label="${photo.likes || 0} me gusta">❤️ ${photo.likes || 0}</span>`;
+        <header class="post__head">
+            <span class="avatar" aria-hidden="true">${emoji}</span>
+            <div class="post__who">
+                <span class="post__name">${escapeHtml(name)}</span>
+                <span class="post__time" data-time>${escapeHtml(timeAgo(photo.createdAt))}</span>
+            </div>
+            ${own ? `<span class="tag-own">Tu foto</span>` : ""}
+        </header>
+        <button type="button" class="post__media" data-open aria-label="Ver foto en grande">
+            <img src="${escapeHtml(photo.thumbURL)}" alt="Foto de la boda" decoding="async"
+                 width="${Number(photo.width) || 4}" height="${Number(photo.height) || 3}">
+            <span class="burst" aria-hidden="true"><svg class="i"><use href="#i-heart"/></svg></span>
+        </button>
+        <div class="post__actions">
+            <button type="button" class="icon-btn icon-btn--lg like-btn" data-like aria-label="Me gusta" aria-pressed="false"><svg class="i"><use href="#i-heart"/></svg></button>
+            <button type="button" class="icon-btn icon-btn--lg" data-download aria-label="Descargar"><svg class="i"><use href="#i-download"/></svg></button>
+            <span class="spacer"></span>
+            ${own ? `<button type="button" class="icon-btn icon-btn--lg" data-delete aria-label="Eliminar"><svg class="i"><use href="#i-trash"/></svg></button>` : ""}
+        </div>
+        <p class="post__likes" data-likes></p>`;
+}
+
+function pinHtml(photo) {
+    const { emoji } = who(photo);
+    const n = photo.likes || 0;
+    return `
+        <img src="${escapeHtml(photo.thumbURL)}" alt="Foto de la boda" decoding="async"
+             width="${Number(photo.width) || 4}" height="${Number(photo.height) || 3}">
+        <span class="polaroid__caption">
+            <span>${emoji}${n ? ` ❤ ${n}` : ""}</span>
+            <small data-time>${escapeHtml(timeAgo(photo.createdAt))}</small>
+        </span>`;
 }
 
 function render() {
-    const uid = currentUid();
-    const ids = new Set(photos.map(p => p.id));
+    if (!els.feed) return;
+    const count = photos.length ? `${photos.length}${hasMore ? "+" : ""} ${photos.length === 1 ? "foto" : "fotos"}` : "";
+    $$("[data-photo-count]").forEach(el => (el.textContent = count));
+    const empty = loaded && photos.length === 0;
+    els.feedEmpty.hidden = !empty;
+    els.boardEmpty.hidden = !empty;
+    $$("[data-feed-end]").forEach(el => (el.hidden = hasMore || photos.length < 4));
 
-    for (const [id, el] of tiles) {
-        if (!ids.has(id)) { el.remove(); tiles.delete(id); }
-    }
+    if (activeView === "inicio") renderFeed();
+    if (activeView === "tablon") renderBoard();
+}
+
+function renderFeed() {
+    const uid = currentUid();
     photos.forEach(photo => {
-        let el = tiles.get(photo.id);
-        const key = `${photo.likes}|${photo.ownerId === uid}`;
+        let el = posts.get(photo.id);
+        const key = `${photo.ownerId === uid}`;
+        if (!el || el.dataset.key !== key) {
+            const fresh = document.createElement("article");
+            fresh.className = "post";
+            fresh.dataset.id = photo.id;
+            fresh.dataset.key = key;
+            fresh.innerHTML = postHtml(photo);
+            el?.replaceWith(fresh);
+            el = fresh;
+            posts.set(photo.id, el);
+        }
+        updatePost(el, photo);
+        els.feed.appendChild(el); // appendChild mueve el nodo si ya existe: mantiene el orden
+    });
+}
+
+function updatePost(el, photo) {
+    const liked = isLiked(photo.id);
+    const btn = el.querySelector("[data-like]");
+    btn.classList.toggle("is-liked", liked);
+    btn.setAttribute("aria-pressed", String(liked));
+    el.querySelector("[data-likes]").textContent = likesText(photo.likes || 0);
+}
+
+function renderBoard() {
+    photos.forEach(photo => {
+        let el = pins.get(photo.id);
+        const key = `${photo.likes || 0}`;
         if (!el) {
             el = document.createElement("button");
             el.type = "button";
-            el.className = "tile";
+            el.className = "polaroid";
             el.dataset.id = photo.id;
             el.setAttribute("aria-label", "Ver foto");
-            tiles.set(photo.id, el);
+            el.style.setProperty("--r", `${(jitter(photo.id) * 3).toFixed(2)}deg`);
+            pins.set(photo.id, el);
         }
         if (el.dataset.key !== key) {
             el.dataset.key = key;
-            el.innerHTML = tileHtml(photo, photo.ownerId === uid);
+            el.innerHTML = pinHtml(photo);
         }
-        els.grid.appendChild(el); // appendChild mueve el nodo si ya existe: mantiene el orden
+        els.board.appendChild(el);
     });
-
-    els.empty.hidden = photos.length > 0;
-    els.count.textContent = photos.length ? `${photos.length}${hasMore ? "+" : ""} ${photos.length === 1 ? "foto" : "fotos"}` : "";
-    els.more.hidden = !hasMore;
 }
 
-/* ============================================================
- *  LIGHTBOX
- * ============================================================ */
-
-const lb = { index: -1, id: null };
-
-function initLightbox() {
-    lb.root = $("#lightbox");
-    lb.img = $("#lightbox-img");
-    lb.likes = $("#lightbox-likes");
-    lb.likeBtn = $("#lightbox-like");
-    lb.downloadBtn = $("#lightbox-download");
-    lb.deleteBtn = $("#lightbox-delete");
-    lb.prev = $("#lightbox-prev");
-    lb.next = $("#lightbox-next");
-    lb.counter = $("#lightbox-counter");
-
-    $("#lightbox-close").addEventListener("click", closeLightbox);
-    lb.prev.addEventListener("click", () => step(-1));
-    lb.next.addEventListener("click", () => step(1));
-    lb.likeBtn.addEventListener("click", onLike);
-    lb.downloadBtn.addEventListener("click", onDownload);
-    lb.deleteBtn.addEventListener("click", onDelete);
-    lb.root.addEventListener("click", e => { if (e.target.classList.contains("lightbox__stage")) closeLightbox(); });
-
-    document.addEventListener("keydown", e => {
-        if (lb.root.hidden) return;
-        if (e.key === "Escape") closeLightbox();
-        if (e.key === "ArrowLeft") step(-1);
-        if (e.key === "ArrowRight") step(1);
-    });
-
-    // Gestos: deslizar para cambiar de foto, deslizar hacia abajo para cerrar.
-    let startX = 0, startY = 0;
-    lb.root.addEventListener("touchstart", e => {
-        startX = e.touches[0].clientX; startY = e.touches[0].clientY;
-    }, { passive: true });
-    lb.root.addEventListener("touchend", e => {
-        const dx = e.changedTouches[0].clientX - startX;
-        const dy = e.changedTouches[0].clientY - startY;
-        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) step(dx < 0 ? 1 : -1);
-        else if (dy > 90 && Math.abs(dy) > Math.abs(dx)) closeLightbox();
-    }, { passive: true });
-
-    // El botón "atrás" de Android cierra el visor en lugar de salir de la app.
-    window.addEventListener("popstate", () => { if (!lb.root.hidden) closeLightbox(true); });
+function updateLikeUI(id) {
+    const photo = photos.find(p => p.id === id);
+    if (!photo) return;
+    const post = posts.get(id);
+    if (post) updatePost(post, photo);
+    if (activeView === "tablon") renderBoard();
 }
 
-function openLightbox(id) {
-    const index = photos.findIndex(p => p.id === id);
-    if (index < 0) return;
-    lb.index = index;
-    lb.root.hidden = false;
-    document.body.classList.add("no-scroll");
-    requestAnimationFrame(() => lb.root.classList.add("is-open"));
-    history.pushState({ lightbox: true }, "");
-    showCurrent();
-    $("#lightbox-close").focus();
-}
-
-function closeLightbox(fromPopState = false) {
-    if (lb.root.hidden) return;
-    lb.root.classList.remove("is-open");
-    lb.root.hidden = true;
-    lb.img.removeAttribute("src");
-    document.body.classList.remove("no-scroll");
-    const tile = tiles.get(lb.id);
-    lb.id = null;
-    if (!fromPopState && history.state?.lightbox) history.back();
-    tile?.focus({ preventScroll: true });
-}
-
-function step(delta) {
-    if (lb.root.hidden) return;
-    const next = lb.index + delta;
-    if (next < 0 || next >= photos.length) return;
-    lb.index = next;
-    showCurrent();
-    if (next >= photos.length - 3) loadMore();
-}
-
-async function showCurrent() {
-    const photo = photos[lb.index];
-    if (!photo) return closeLightbox();
-    const changed = lb.id !== photo.id;
-    lb.id = photo.id;
-    if (changed) {
-        // Mientras carga la foto completa se muestra la miniatura (ya en memoria).
-        lb.img.src = photo.thumbURL;
-        lb.likeBtn.classList.remove("is-liked");
-        getFullImageUrl(photo.id)
-            .then(url => { if (lb.id === photo.id) lb.img.src = url; })
-            .catch(err => {
-                console.warn(err);
-                if (err.code === "not-found" && lb.id === photo.id) {
-                    showToast("Esta foto ya no existe", "warning");
-                    dropPhoto(photo.id);
-                    refreshLightbox();
-                }
-            });
+function refreshTimes() {
+    for (const [id, el] of [...posts, ...pins]) {
+        const photo = photos.find(p => p.id === id);
+        const t = el.querySelector("[data-time]");
+        if (photo && t) t.textContent = timeAgo(photo.createdAt);
     }
-    lb.likes.textContent = `❤️ ${photo.likes || 0}`;
-    lb.counter.textContent = `${lb.index + 1} / ${photos.length}${hasMore ? "+" : ""}`;
-    lb.prev.disabled = lb.index === 0;
-    lb.next.disabled = lb.index === photos.length - 1 && !hasMore;
-    lb.deleteBtn.hidden = photo.ownerId !== currentUid();
-
-    const id = photo.id;
-    try {
-        const liked = await hasLiked(id);
-        if (lb.id === id) setLikedUI(liked);
-    } catch { /* sin conexión: se deja el estado por defecto */ }
 }
 
-/** Tras un cambio en tiempo real, mantiene el visor en la misma foto. */
-function refreshLightbox() {
-    if (lb.root?.hidden !== false || !lb.id) return;
-    const index = photos.findIndex(p => p.id === lb.id);
-    if (index < 0) { closeLightbox(); return; }
-    lb.index = index;
-    showCurrent();
-}
+/* ---------------- Interacción ---------------- */
 
-function setLikedUI(liked) {
-    lb.likeBtn.classList.toggle("is-liked", liked);
-    lb.likeBtn.setAttribute("aria-pressed", String(liked));
-    lb.likeBtn.innerHTML = liked ? "❤️ Te gusta" : "🤍 Me gusta";
-}
+let lastTap = { id: null, t: 0 };
+let tapTimer = null;
 
-async function onLike() {
-    const photo = photos[lb.index];
-    if (!photo || lb.likeBtn.disabled) return;
-    lb.likeBtn.disabled = true;
-    try {
-        const liked = await toggleLike(photo.id);
-        setLikedUI(liked);
-        // Las fotos fuera del bloque en tiempo real no se actualizan solas.
-        const stored = older.get(photo.id);
-        if (stored && !live.some(p => p.id === photo.id)) {
-            stored.likes = Math.max(0, (stored.likes || 0) + (liked ? 1 : -1));
-            render();
-            lb.likes.textContent = `❤️ ${stored.likes}`;
+function onFeedClick(e) {
+    const post = e.target.closest(".post");
+    if (!post) return;
+    const photo = photos.find(p => p.id === post.dataset.id);
+    if (!photo) return;
+
+    if (e.target.closest("[data-open]")) {
+        // Doble toque = ❤️ (con corazón gigante); toque simple = ver en grande.
+        const now = performance.now();
+        if (lastTap.id === photo.id && now - lastTap.t < DOUBLE_TAP_MS) {
+            clearTimeout(tapTimer);
+            lastTap = { id: null, t: 0 };
+            const b = post.querySelector(".burst");
+            b.classList.remove("is-on");
+            void b.offsetWidth;
+            b.classList.add("is-on");
+            if (!isLiked(photo.id)) like(photo, post);
+            return;
         }
+        lastTap = { id: photo.id, t: now };
+        tapTimer = setTimeout(() => openAt(photo.id), DOUBLE_TAP_MS);
+        return;
+    }
+    if (e.target.closest("[data-like]")) like(photo, post);
+    if (e.target.closest("[data-download]")) download(photo);
+    if (e.target.closest("[data-delete]")) remove(photo);
+}
+
+async function like(photo, post) {
+    const btn = post.querySelector("[data-like]");
+    btn.disabled = true;
+    try {
+        const pending = toggleLike(photo.id);
+        updatePost(post, photo); // el corazón cambia al instante
+        const liked = await pending;
         if (liked) {
-            lb.likeBtn.classList.remove("pop");
-            void lb.likeBtn.offsetWidth;
-            lb.likeBtn.classList.add("pop");
+            btn.classList.remove("pop");
+            void btn.offsetWidth;
+            btn.classList.add("pop");
         }
     } catch (err) {
         console.error(err);
         showToast(friendlyError(err), "error");
     } finally {
-        lb.likeBtn.disabled = false;
+        btn.disabled = false;
+        updatePost(post, photo);
     }
 }
 
-async function onDownload() {
-    const photo = photos[lb.index];
-    if (!photo) return;
-    lb.downloadBtn.disabled = true;
+async function download(photo) {
     try {
         await downloadPhoto(await getFullImageUrl(photo.id), photoFilename(photo));
     } catch (err) {
         console.error(err);
         showToast(friendlyError(err), "error");
-    } finally {
-        lb.downloadBtn.disabled = false;
     }
 }
 
-async function onDelete() {
-    const photo = photos[lb.index];
-    if (!photo || photo.ownerId !== currentUid()) return;
+async function remove(photo) {
     const ok = await confirmDialog({
         title: "Eliminar foto",
-        message: "¿Seguro que quieres eliminar esta foto?",
+        message: "¿Seguro que quieres eliminar esta foto? Desaparecerá para todos.",
         confirmText: "Eliminar",
-        cancelText: "Cancelar",
         danger: true
     });
     if (!ok) return;
     try {
         await deletePhoto(photo);
-        // Se quita al momento; el listener en tiempo real lo confirmará.
         dropPhoto(photo.id);
-        if (photos.length === 0) closeLightbox();
-        else { lb.index = Math.min(lb.index, photos.length - 1); lb.id = null; showCurrent(); }
         showToast("Foto eliminada", "success");
     } catch (err) {
         console.error(err);
         showToast(friendlyError(err), "error");
     }
+}
+
+function openAt(id) {
+    const index = photos.findIndex(p => p.id === id);
+    if (index < 0) return;
+    openViewer({
+        mode: "gallery",
+        items: photos.map(photo => ({ type: "photo", photo })),
+        start: index,
+        onNear: () => loadMore().then(list => appendToViewer(list.map(photo => ({ type: "photo", photo }))))
+    });
 }

@@ -92,16 +92,16 @@ export const weddingConfig = {
 
     // Límites de subida. Plan Spark (gratuito): las fotos se guardan en Firestore,
     // que tiene 1 GiB gratis y documentos de 1 MiB como máximo. Con ~300 KB por foto
-    // caben unas 3.000. Si subes estos valores, caben menos fotos.
+    // caben unas 2.500-3.000. Si subes estos valores, caben menos fotos.
     upload: {
         maxFilesPerUpload: 20,          // Fotos por operación
         maxOriginalSizeMB: 40,          // Se rechazan originales más grandes
         maxSide: 1600,                  // Lado más largo de la foto final (px)
         quality: 0.75,                  // Calidad JPEG inicial (0-1)
         maxBytes: 450 * 1024,           // Tope por foto: si pesa más, se baja calidad/tamaño
-        thumbMaxSide: 360,              // Miniatura para la galería
-        thumbQuality: 0.6,
-        thumbMaxBytes: 60 * 1024
+        thumbMaxSide: 640,              // Miniatura para el feed y el tablón
+        thumbQuality: 0.65,
+        thumbMaxBytes: 75 * 1024        // Las reglas de Firestore rechazan miniaturas de 80 KB o más
     },
 
     gallery: {

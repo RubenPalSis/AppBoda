@@ -39,8 +39,8 @@ import {
 import {
     initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
     connectFirestoreEmulator, collection, doc, getDoc, setDoc, deleteDoc,
-    getDocs, query, orderBy, limit, startAfter, onSnapshot, serverTimestamp, increment,
-    writeBatch, Bytes
+    getDocs, query, where, orderBy, limit, startAfter, onSnapshot, serverTimestamp, increment,
+    writeBatch, Bytes, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 export const isFirebaseConfigured = !Object.values(firebaseConfig).some(v => String(v).startsWith("TU_"));
@@ -61,8 +61,8 @@ if (USE_EMULATORS) {
 
 export {
     onAuthStateChanged, signInAnonymously, signInWithEmailAndPassword, sendPasswordResetEmail, signOut,
-    collection, doc, getDoc, setDoc, deleteDoc, getDocs, query, orderBy, limit, startAfter,
-    onSnapshot, serverTimestamp, increment, writeBatch, Bytes
+    collection, doc, getDoc, setDoc, deleteDoc, getDocs, query, where, orderBy, limit, startAfter,
+    onSnapshot, serverTimestamp, increment, writeBatch, Bytes, Timestamp
 };
 
 /** Resuelve con el usuario actual cuando Firebase Auth ha terminado de inicializarse. */
